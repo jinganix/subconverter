@@ -1,5 +1,15 @@
 # subconverter-ts
 
+[![CI](https://github.com/jinganix/subconverter/actions/workflows/ci.yml/badge.svg)](https://github.com/jinganix/subconverter/actions/workflows/ci.yml)
+[![core coverage](https://codecov.io/gh/jinganix/subconverter/branch/main/graph/badge.svg?flag=core)](https://codecov.io/gh/jinganix/subconverter/flags/core)
+[![node coverage](https://codecov.io/gh/jinganix/subconverter/branch/main/graph/badge.svg?flag=node)](https://codecov.io/gh/jinganix/subconverter/flags/node)
+[![browser coverage](https://codecov.io/gh/jinganix/subconverter/branch/main/graph/badge.svg?flag=browser)](https://codecov.io/gh/jinganix/subconverter/flags/browser)
+[![cli coverage](https://codecov.io/gh/jinganix/subconverter/branch/main/graph/badge.svg?flag=cli)](https://codecov.io/gh/jinganix/subconverter/flags/cli)
+[![npm core](https://img.shields.io/npm/v/@subconverter/core)](https://www.npmjs.com/package/@subconverter/core)
+[![npm node](https://img.shields.io/npm/v/@subconverter/node)](https://www.npmjs.com/package/@subconverter/node)
+[![npm browser](https://img.shields.io/npm/v/@subconverter/browser)](https://www.npmjs.com/package/@subconverter/browser)
+[![npm cli](https://img.shields.io/npm/v/@subconverter/cli)](https://www.npmjs.com/package/@subconverter/cli)
+
 [English](README.md) | 简体中文
 
 [tindy2013/subconverter](https://github.com/tindy2013/subconverter) 的 TypeScript 重写版本：
@@ -21,6 +31,15 @@
 | `packages/cli`     | `subconverter` 命令行工具。                            |
 
 引擎从不导入 Node 内置模块或 DOM 全局对象，因此同一份代码可同时支撑以上三个运行目标。
+
+## 安装
+
+```bash
+npm i @subconverter/core     # 仅引擎
+npm i @subconverter/node     # + Node 加载层（fetch/fs）
+npm i @subconverter/browser  # 浏览器 ESM / IIFE 全局变量 `SubConverter`
+npm i -g @subconverter/cli  # CLI：`subconverter`
+```
 
 ## 功能特性
 
@@ -93,6 +112,28 @@ import { generate, parseSubscription, TargetFormat } from "@subconverter/core";
 const nodes = parseSubscription(await response.text());
 const clash = generate(nodes, { target: TargetFormat.Clash });
 ```
+
+## 发版
+
+四个包同版本推进。根`package.json`的版本号是唯一可信源，`scripts/sync-versions.mjs`
+负责同步到`packages/*`和`package-lock.json`。
+
+1. 先在仓库`Secrets`里配好`ACTION_TOKEN`（带`repo` + `workflow`权限的PAT）。npm
+   认证不需要token：本仓库用[Trusted Publishing](https://docs.npmjs.com/trusted-publishers/)
+   （OIDC）。在npmjs.com上打开每个包（`@subconverter/core`、`node`、`browser`、`cli`）
+   → Settings → Trusted Publisher → GitHub Actions，填org `subconverter`、仓库
+   `jinganix/subconverter`、工作流文件`release.yml`。`publish-npm`任务已申请
+   `id-token: write`权限并会升级到最新npm CLI。
+2. Actions → `RELEASE` → Run workflow。`version`留空即自动bump（用`bump`选
+   `patch`/`minor`/`major`），填`x.y.z`则发指定版本。
+3. 流水线会自动提`chore: release x.y.z`的PR并合并，打`vx.y.z`标签、建GitHub release，
+   然后按依赖顺序发布：`core` → `node`/`browser` → `cli`。
+4. 某个包发布失败时，用`publish_only: true` + `targets: <core|node|browser|cli>` +
+   已有`version`单独重试。
+
+注意：信任绑定只能建在npm上已存在的包上，所以每个包的首次发布需用一次性automation
+token手动发一次（从release标签的干净checkout里跑`npm publish --access public`），绑好
+信任关系后删掉token。之后每次发版都是无token的，且自动带provenance。
 
 ## 许可证
 

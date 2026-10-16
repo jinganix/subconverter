@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check commit message
+        if: github.event_name == 'push'
+        run: |
+          last_msg=$(git log -1 --pretty=format:"%s")
+          echo "Last commit: $last_msg"
+          if echo "$last_msg" | grep -Eq "^chore: (release|bump version)"; then
+            echo "Release automation commit, skipping message check"
+            exit 0
+          fi
+          echo "$last_msg" | ./docs/scripts/validate-commit-msg.sh /dev/stdin
+
+      - name: Gate (typecheck + lint + test)
+        run: npm run check
+
+      - name: Build
+        run: npm run build
+
+  codecov:
+    name: Codecov
+    needs: [check]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate coverage reports
+        run: |
+          npm run test:coverage -w packages/core
+          npm run test:coverage -w packages/node
+          npm run test:coverage -w packages/browser
+          npm run test:coverage -w packages/cli
+
+      - name: Upload core coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: packages/core/coverage/lcov.info
+          flags: core
+          name: core
+          disable_search: true
+          fail_ci_if_error: false
+
+      - name: Upload node coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: packages/node/coverage/lcov.info
+          flags: node
+          name: node
+          disable_search: true
+          fail_ci_if_error: false
+
+      - name: Upload browser coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: packages/browser/coverage/lcov.info
+          flags: browser
+          name: browser
+          disable_search: true
+          fail_ci_if_error: false
+
+      - name: Upload cli coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: packages/cli/coverage/lcov.info
+          flags: cli
+          name: cli
+          disable_search: true
+          fail_ci_if_error: false

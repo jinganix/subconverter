@@ -24,6 +24,9 @@
       "type:lib"
     ]
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "npm run typecheck:tsc && npm run lint",
