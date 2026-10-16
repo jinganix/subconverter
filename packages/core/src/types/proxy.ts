@@ -143,6 +143,7 @@ export interface Proxy {
   authStr: string;
   sni: string;
   fingerprint: string;
+  shortId: string;
   ca: string;
   caStr: string;
   recvWindowConn: number;
@@ -205,6 +206,7 @@ export function createProxy(): Proxy {
     selfIp: "",
     selfIpv6: "",
     serverName: "",
+    shortId: "",
     snellVersion: 0,
     sni: "",
     tcpFastOpen: undefined,

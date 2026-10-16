@@ -45,24 +45,35 @@ npm i -g @subconverter/cli  # CLI：`subconverter`
 
 **输入解析**（`@subconverter/core`）
 
-- 分享链接：`ss://`、`ssr://`、`vmess://`（v2rayN / Shadowrocket / Kitsunebi / Quantumult）、
-  `trojan://`、`hysteria2://` / `hy2://`、`anytls://`、`Netch://`、telegram socks/http。
+- 分享链接：`ss://`（SIP002、明文、`simple-obfs`/`v2ray-plugin`）、`ssr://`、
+  `vmess://`（v2rayN JSON / Shadowrocket / Kitsunebi / Quantumult 分享格式）、
+  `vless://`（tcp/ws/grpc，`tls`/`reality`，支持 `flow`/`fp`/`pbk`/`sid`）、
+  `trojan://`（直连/ws）、`hysteria2://` / `hy2://`、`anytls://`、`tuic://`、
+  `socks://` / telegram socks、telegram http、`http://` 凭证列表、`Netch://`。
 - 订阅：base64 链接列表、纯文本链接列表、`ssd://`。
-- 配置：Clash YAML、Surge/Loon `[Proxy]` INI、v2rayN JSON、Shadowsocks/SSR JSON、SSTap、
-  Netch。
+- 配置：Clash YAML、Surge/Loon `[Proxy]` INI（含 `[WireGuard]` 段落）、v2rayN JSON、
+  Shadowsocks/SSR JSON、SSTap、Netch。
 - 节点操作匹配器：`!!GROUP=`、`!!GROUPID=`/`!!INSERT=`、`!!TYPE=`、`!!PORT=`、
   `!!SERVER=`，以及重命名/emoji/子筛选规则。
 
 **输出生成**
 
 - Clash / ClashR YAML（`clashNewFieldName` 可切换 `proxies`/`proxy-groups` 与旧版
-  `Proxy`/`Proxy Group`；新字段名下会输出 `dialer-proxy`）。
-- Surge（proxy + proxy-group 段落、WireGuard 子段落、基础配置保留）。
-- Quantumult X（`[server_local]`/`[policy]`）、Quantumult（`[SERVER]`/`[POLICY]`）、Loon。
-- sing-box JSON（`outbounds`、selector/urltest 分组、由规则集生成的
-  `route.rules`/`route.final`）。
+  `Proxy`/`Proxy Group`；新字段名下会输出 `dialer-proxy`；VLESS 支持 `flow`/`reality-opts`）。
+- Surge v2/v3/v4/v5（proxy + proxy-group 段落、WireGuard 子段落、基础配置保留；
+  Trojan ws 参数、`hysteria2` 命名）。
+- Surfboard（Surge 兼容子集，不含 Hysteria2/AnyTLS）。
+- Quantumult X（`[server_local]`/`[policy]`，含 `vless` 与 REALITY 参数）、
+  Quantumult（`[SERVER]`/`[POLICY]`）、Loon（含 `VLESS` 与 REALITY 参数）。
+- sing-box JSON（`outbounds` 含 `vless`/`tuic` 与 `flow`/`reality`、selector/urltest
+  分组、由规则集生成的 `route.rules`/`route.final`；SSR 无对应映射会被丢弃）。
 - Mellow（`[Endpoint]`/`[EndpointGroup]`、由规则集生成的 `[RoutingRule]`）。
-- 分享链接导出：`v2ray`、`ss`、`ssr`、`trojan`、`mixed`、`nodelist`、`ssd`、SIP008。
+- 分享链接导出：`v2ray`、`ss`、`ssr`、`trojan`、`mixed`（经典 SS/SSR/VMess/Trojan
+  子集；VLESS/Hysteria2 链接导出为已知缺口）、`nodelist`、`ssd`、SIP008（`sssub`）。
+
+> 支持的协议与节点格式会持续补充：新增链接协议、传输方式（`ws`/`grpc`/`h2`/`http`）
+> 或 TLS 模式（如 REALITY）时，请同步扩展 `packages/core/tests/` 下的静态矩阵
+>（`protocol-matrix`、`conversion-snapshots`、`format-matrix`）与本清单。
 
 **规则集、分组与设置**
 

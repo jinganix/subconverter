@@ -1,0 +1,17 @@
+proxies:
+  - {name: SS-plain, server: www.example.com, port: 1080, type: ss, cipher: chacha20-ietf-poly1305, password: password}
+  - {name: SS-obfs, server: 1.1.1.2, port: 8388, type: ss, cipher: aes-256-gcm, password: pw, plugin: obfs, plugin-opts: {mode: http, host: www.bing.com}}
+  - {name: SSR-test, server: 1.2.3.4, port: 8388, type: ssr, cipher: aes-256-cfb, password: pw, protocol: auth_sha1_v4, obfs: http_simple, protocol-param: "", obfs-param: ""}
+  - {name: VMESS-v2rayn, server: 1.2.3.4, port: 443, type: vmess, uuid: b831381d-6324-4d53-ad4f-8cda48b30811, alterId: 0, cipher: auto, tls: true, network: ws, ws-opts: {path: /p, headers: {Host: h.example.com}}}
+  - {name: VMESS-sr, server: 2.2.2.2, port: 443, type: vmess, uuid: b831381d-6324-4d53-ad4f-8cda48b30811, alterId: 0, cipher: auto, tls: true, network: ws, ws-opts: {path: /p, headers: {Host: h.example.com}}}
+  - {name: VMESS-kit, server: 3.3.3.3, port: 443, type: vmess, uuid: b831381d-6324-4d53-ad4f-8cda48b30811, alterId: 0, cipher: auto, tls: true, network: ws, ws-opts: {path: /, headers: {Host: h.example.com}}}
+  - {name: VMESS-std, server: 4.4.4.4, port: 443, type: vmess, uuid: b831381d-6324-4d53-ad4f-8cda48b30811, alterId: 0, cipher: auto, tls: true}
+  - {name: VLESS-test, server: 5.5.5.5, port: 443, type: vless, uuid: b831381d-6324-4d53-ad4f-8cda48b30811, tls: true, servername: h.example.com, network: ws, ws-opts: {path: /p, headers: {Host: h.example.com}}}
+  - {name: TJ-test, server: 6.6.6.6, port: 443, type: trojan, password: pw, sni: h.example.com}
+  - {name: TJ-ws, server: 6.6.6.7, port: 443, type: trojan, password: pw, sni: h.example.com, network: ws, ws-opts: {path: /ws, headers: {Host: h.example.com}}}
+  - {name: HY2-test, server: 7.7.7.7, port: 443, type: hysteria2, password: pw, auth: pw, sni: h.example.com, up: 50, down: 100, alpn: [h3], obfs: salamander, obfs-password: obfspw}
+  - {name: HY2-short, server: 7.7.7.8, port: 443, type: hysteria2, password: pw, auth: pw, sni: h.example.com}
+  - {name: AT-test, server: 8.8.8.8, port: 443, type: anytls, password: pw, sni: h.example.com}
+  - {name: TU-test, server: 9.9.9.9, port: 443, type: tuic, password: pw, uuid: b831381d-6324-4d53-ad4f-8cda48b30811, sni: h.example.com, alpn: [h3], disable-sni: false, reduce-rtt: false, request-timeout: 15000, udp-relay-mode: native, congestion-controller: bbr}
+  - {name: SOCKS-tg, server: 10.10.10.1, port: 1080, type: socks5, username: u, password: p}
+  - {name: HTTP-tg, server: 10.10.10.2, port: 8080, type: http, username: u, password: p, tls: false}

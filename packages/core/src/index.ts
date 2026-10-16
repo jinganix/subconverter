@@ -156,6 +156,7 @@ export { formatSingBoxInterval, toSingBox, type SingBoxOptions } from "./generat
 export { toQuan, type QuanOptions } from "./generator/quan";
 export { toQuanX, type QuanxOptions } from "./generator/quanx";
 export { generatePeer, toSurge } from "./generator/surge";
+export { toSurfboard, type SurfboardOptions } from "./generator/surfboard";
 export {
   proxyToSingle,
   proxyToSsd,

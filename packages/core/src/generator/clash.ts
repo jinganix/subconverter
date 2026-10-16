@@ -411,6 +411,14 @@ function buildClashProxy(
       if (x.fingerprint !== "") {
         proxy["client-fingerprint"] = x.fingerprint;
       }
+      if (x.publicKey !== "" || x.shortId !== "") {
+        const realityOpts: Record<string, unknown> = {};
+        if (x.publicKey !== "") {
+          realityOpts["public-key"] = x.publicKey;
+        }
+        realityOpts["short-id"] = x.shortId;
+        proxy["reality-opts"] = realityOpts;
+      }
       if (x.alpn.length > 0) {
         proxy.alpn = x.alpn;
       }

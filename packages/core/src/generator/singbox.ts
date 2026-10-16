@@ -107,18 +107,9 @@ function buildOutbound(
       proxy = out;
       break;
     }
+    // sing-box has no SSR support — drop such nodes.
     case ProxyType.ShadowsocksR:
-      proxy = {
-        ...common,
-        method: x.encryptMethod,
-        obfs: x.obfs,
-        obfs_param: x.obfsParam,
-        password: x.password,
-        protocol: x.protocol,
-        protocol_param: x.protocolParam,
-        type: "shadowsocksr",
-      };
-      break;
+      return undefined;
     case ProxyType.VMess: {
       const out: Record<string, unknown> = {
         ...common,
@@ -134,11 +125,37 @@ function buildOutbound(
       proxy = out;
       break;
     }
+    case ProxyType.VLESS: {
+      const out: Record<string, unknown> = { ...common, type: "vless", uuid: x.userId };
+      if (x.flow !== "") {
+        out.flow = x.flow;
+      }
+      const transport = buildTransport(x);
+      if (transport) {
+        out.transport = transport;
+      }
+      proxy = out;
+      break;
+    }
     case ProxyType.Trojan: {
       const out: Record<string, unknown> = { ...common, password: x.password, type: "trojan" };
       const transport = buildTransport(x);
       if (transport) {
         out.transport = transport;
+      }
+      proxy = out;
+      break;
+    }
+    case ProxyType.TUIC: {
+      const out: Record<string, unknown> = {
+        ...common,
+        password: x.password,
+        type: "tuic",
+        udp_relay_mode: "native",
+        uuid: x.userId,
+      };
+      if (x.congestionControl !== "") {
+        out.congestion_control = x.congestionControl;
       }
       proxy = out;
       break;
@@ -260,6 +277,17 @@ function buildOutbound(
 
   const tls = buildTls(x, scv);
   if (tls) {
+    if (x.type === ProxyType.VLESS && (x.publicKey !== "" || x.shortId !== "")) {
+      const tlsRec = tls as Record<string, unknown>;
+      if (x.fingerprint !== "") {
+        tlsRec.utls = { enabled: true, fingerprint: x.fingerprint };
+      }
+      tlsRec.reality = {
+        enabled: true,
+        public_key: x.publicKey,
+        short_id: x.shortId,
+      };
+    }
     proxy.tls = tls;
   }
   if (udp !== undefined && !udp) {

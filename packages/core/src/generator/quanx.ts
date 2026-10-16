@@ -123,12 +123,32 @@ function buildQuanxNode(x: Proxy, settings: ExtraSettings, remark: string): stri
         }
       }
       break;
-    case ProxyType.AnyTLS:
-      proxyStr = `anytls = ${hostname}:${port}, password=${x.password}`;
-      if (x.sni !== "") {
-        proxyStr += `, tls-host=${x.sni}`;
+    case ProxyType.VLESS: {
+      const vmethod = method === "" ? "none" : method;
+      proxyStr = `vless = ${hostname}:${port}, method=${vmethod}, password=${x.userId}`;
+      if (tlsSecure && tls13 !== undefined) {
+        proxyStr += `, tls13=${triStr(tls13)}`;
+      }
+      const obfsHost = host !== "" ? host : x.serverName !== "" ? x.serverName : x.sni;
+      if (x.transferProtocol === "ws") {
+        proxyStr += tlsSecure ? ", obfs=wss" : ", obfs=ws";
+        proxyStr += `, obfs-host=${obfsHost}, obfs-uri=${path}`;
+      } else if (tlsSecure) {
+        proxyStr += `, obfs=over-tls, obfs-host=${obfsHost}`;
+      }
+      if (x.publicKey !== "") {
+        proxyStr += `, reality-base64-pubkey=${x.publicKey}`;
+      }
+      if (x.shortId !== "") {
+        proxyStr += `, reality-hex-shortid=${x.shortId}`;
+      }
+      if (x.flow !== "") {
+        proxyStr += `, vless-flow=${x.flow}`;
       }
       break;
+    }
+    // Quantumult X has no AnyTLS/Hysteria2/TUIC mapping — drop them instead
+    // of emitting non-standard lines.
     default:
       return undefined;
   }

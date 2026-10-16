@@ -946,10 +946,14 @@ export function explodeVless(link: string, node: Proxy): void {
   const network = getUrlArg(addition, "type");
   const security = getUrlArg(addition, "security");
   const host = getUrlArg(addition, "host");
-  const path = urlDecode(getUrlArg(addition, "path"));
+  const rawPath = urlDecode(getUrlArg(addition, "path"));
+  const serviceName = urlDecode(getUrlArg(addition, "serviceName"));
+  const path = rawPath !== "" ? rawPath : serviceName;
   const sni = getUrlArg(addition, "sni");
   const flow = getUrlArg(addition, "flow");
   const fingerprint = getUrlArg(addition, "fp");
+  const publicKey = getUrlArg(addition, "pbk");
+  const shortId = getUrlArg(addition, "sid");
   const alpn = getUrlArg(addition, "alpn");
   if (remark === "") {
     remark = `${server}:${port}`;
@@ -963,12 +967,14 @@ export function explodeVless(link: string, node: Proxy): void {
     network,
     path,
     port,
+    publicKey,
     remark,
     scv:
       getUrlArg(addition, "allowInsecure") === ""
         ? undefined
         : parseTri(getUrlArg(addition, "allowInsecure")),
     server,
+    shortId,
     sni,
     tls: security,
     userId,

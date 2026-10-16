@@ -1,0 +1,3 @@
+ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpwYXNzd29yZA@www.example.com:1080#SS-plain
+ss://YWVzLTI1Ni1nY206cHc@1.1.1.2:8388/?plugin=obfs-local%3Bobfs%3Dhttp%3Bobfs-host%3Dwww.bing.com#SS-obfs
+ss://YWVzLTI1Ni1nY206cHc@1.1.1.2:8388/?plugin=obfs-local%3Bobfs%3Dhttp%3Bobfs-host%3Dwww.bing.com#SS-obfs

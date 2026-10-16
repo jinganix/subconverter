@@ -38,7 +38,7 @@ function inlineRuleset(): RulesetContent {
 }
 
 describe("default profile", () => {
-  it("exposes upstream-like groups and rules", () => {
+  it("exposes default groups and rules", () => {
     const groups = getDefaultProxyGroups();
     const rules = getDefaultRulesets();
     expect(groups.length).toBeGreaterThan(5);

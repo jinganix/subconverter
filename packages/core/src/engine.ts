@@ -8,6 +8,7 @@ import { toQuan } from "./generator/quan";
 import { toQuanX } from "./generator/quanx";
 import { rulesetToClashRules, rulesetToSurgeRules } from "./generator/ruleset";
 import { toSingBox } from "./generator/singbox";
+import { toSurfboard } from "./generator/surfboard";
 import { toSurge } from "./generator/surge";
 import type { Proxy } from "./types/proxy";
 import type { ProxyGroupConfig } from "./types/proxy-group";
@@ -132,6 +133,16 @@ export function generate(nodes: Proxy[], options: GenerateOptions): string {
       return proxyToSingle(nodes, 2, settings);
     case TargetFormat.SSD:
       return proxyToSsd(nodes, "", "");
+    case TargetFormat.SSSub:
+      return proxyToSsSub(nodes, options.baseConf ?? "");
+    case TargetFormat.Surfboard: {
+      const rules = rulesets ? rulesetToSurgeRules(rulesets, options.surgeVersion ?? 4) : undefined;
+      return toSurfboard(nodes, groups, settings, {
+        baseConf: options.baseConf ?? "",
+        nodeList: settings.nodeList,
+        rules,
+      });
+    }
     case TargetFormat.NodeList: {
       settings.nodeList = true;
       return proxyToSingle(nodes, V2RAY_TYPE_MASK, settings);

@@ -1,0 +1,12 @@
+ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpwYXNzd29yZA@www.example.com:1080#SS-plain
+ss://YWVzLTI1Ni1nY206cHc@1.1.1.2:8388/?plugin=obfs-local%3Bobfs%3Dhttp%3Bobfs-host%3Dwww.bing.com#SS-obfs
+ssr://MS4yLjMuNDo4Mzg4OmF1dGhfc2hhMV92NDphZXMtMjU2LWNmYjpodHRwX3NpbXBsZTpjSGMvP2dyb3VwPVJ3JnJlbWFya3M9VTFOU0xYUmxjM1Emb2Jmc3BhcmFtPSZwcm90b3BhcmFtPQ
+vmess://eyJ2IjoiMiIsInBzIjoiVk1FU1MtdjJyYXluIiwiYWRkIjoiMS4yLjMuNCIsInBvcnQiOiI0NDMiLCJ0eXBlIjoibm9uZSIsImlkIjoiYjgzMTM4MWQtNjMyNC00ZDUzLWFkNGYtOGNkYTQ4YjMwODExIiwiYWlkIjoiMCIsIm5ldCI6IndzIiwicGF0aCI6Ii9wIiwiaG9zdCI6ImguZXhhbXBsZS5jb20iLCJ0bHMiOiJ0bHMifQ==
+vmess://eyJ2IjoiMiIsInBzIjoiVk1FU1Mtc3IiLCJhZGQiOiIyLjIuMi4yIiwicG9ydCI6IjQ0MyIsInR5cGUiOiJub25lIiwiaWQiOiJiODMxMzgxZC02MzI0LTRkNTMtYWQ0Zi04Y2RhNDhiMzA4MTEiLCJhaWQiOiIwIiwibmV0Ijoid3MiLCJwYXRoIjoiL3AiLCJob3N0IjoiaC5leGFtcGxlLmNvbSIsInRscyI6InRscyJ9
+vmess://eyJ2IjoiMiIsInBzIjoiVk1FU1Mta2l0IiwiYWRkIjoiMy4zLjMuMyIsInBvcnQiOiI0NDMiLCJ0eXBlIjoibm9uZSIsImlkIjoiYjgzMTM4MWQtNjMyNC00ZDUzLWFkNGYtOGNkYTQ4YjMwODExIiwiYWlkIjoiMCIsIm5ldCI6IndzIiwicGF0aCI6Ii8iLCJob3N0IjoiaC5leGFtcGxlLmNvbSIsInRscyI6InRscyJ9
+vmess://eyJ2IjoiMiIsInBzIjoiVk1FU1Mtc3RkIiwiYWRkIjoiNC40LjQuNCIsInBvcnQiOiI0NDMiLCJ0eXBlIjoibm9uZSIsImlkIjoiYjgzMTM4MWQtNjMyNC00ZDUzLWFkNGYtOGNkYTQ4YjMwODExIiwiYWlkIjoiMCIsIm5ldCI6InRjcCIsInBhdGgiOiIvIiwiaG9zdCI6IiIsInRscyI6InRscyJ9
+vless://b831381d-6324-4d53-ad4f-8cda48b30811@5.5.5.5:443?&security=tls&sni=h.example.com&type=ws&headerType=&host=h.example.com&path=%2Fp#VLESS-test
+trojan://pw@6.6.6.6:443?allowInsecure=0&sni=h.example.com#TJ-test
+trojan://pw@6.6.6.7:443?allowInsecure=0&sni=h.example.com&ws=1&wspath=%2Fws#TJ-ws
+hysteria2://pw@7.7.7.7:443?insecure=0&obfs=salamander&obfs-password=salamander&sni=h.example.com#HY2-test
+hysteria2://pw@7.7.7.8:443?insecure=0&sni=h.example.com#HY2-short

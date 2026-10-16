@@ -47,23 +47,38 @@ npm i -g @subconverter/cli  # CLI: `subconverter`
 
 **Input parsing** (`@subconverter/core`)
 
-- Share links: `ss://`, `ssr://`, `vmess://` (v2rayN / Shadowrocket / Kitsunebi / Quantumult),
-  `trojan://`, `hysteria2://` / `hy2://`, `anytls://`, `Netch://`, telegram socks/http.
+- Share links: `ss://` (SIP002, plain, `simple-obfs`/`v2ray-plugin`), `ssr://`,
+  `vmess://` (v2rayN JSON / Shadowrocket / Kitsunebi / Quantumult share formats),
+  `vless://` (tcp/ws/grpc, `tls`/`reality` with `flow`/`fp`/`pbk`/`sid`),
+  `trojan://` (direct/ws), `hysteria2://` / `hy2://`, `anytls://`, `tuic://`,
+  `socks://` / telegram socks, telegram http, `http://` credential lists, `Netch://`.
 - Subscriptions: base64 link lists, plain-text link lists, `ssd://`.
-- Configs: Clash YAML, Surge/Loon `[Proxy]` INI, v2rayN JSON, Shadowsocks/SSR JSON, SSTap,
-  Netch.
+- Configs: Clash YAML, Surge/Loon `[Proxy]` INI (incl. `[WireGuard]` sections),
+  v2rayN JSON, Shadowsocks/SSR JSON, SSTap, Netch.
 - Node manipulation matchers: `!!GROUP=`, `!!GROUPID=`/`!!INSERT=`, `!!TYPE=`, `!!PORT=`,
   `!!SERVER=`, plus rename/emoji/sub-filter rules.
 
 **Output generation**
 
 - Clash / ClashR YAML (`clashNewFieldName` toggles `proxies`/`proxy-groups` vs legacy
-  `Proxy`/`Proxy Group`; `dialer-proxy` emission for the new field names).
-- Surge (proxy + proxy-group sections, WireGuard sub-sections, base-config preservation).
-- Quantumult X (`[server_local]`/`[policy]`), Quantumult (`[SERVER]`/`[POLICY]`), Loon.
-- sing-box JSON (`outbounds`, selector/urltest groups, `route.rules`/`route.final` from rulesets).
+  `Proxy`/`Proxy Group`; `dialer-proxy` emission for the new field names;
+  VLESS `flow`/`reality-opts` supported).
+- Surge v2/v3/v4/v5 (proxy + proxy-group sections, WireGuard sub-sections,
+  base-config preservation; Trojan ws params, `hysteria2` naming).
+- Surfboard (Surge-compatible subset without Hysteria2/AnyTLS).
+- Quantumult X (`[server_local]`/`[policy]`, incl. `vless` + REALITY keys),
+  Quantumult (`[SERVER]`/`[POLICY]`), Loon (incl. `VLESS` + REALITY keys).
+- sing-box JSON (`outbounds` incl. `vless`/`tuic` + `flow`/`reality`, selector/urltest
+  groups, `route.rules`/`route.final` from rulesets; SSR has no mapping and is dropped).
 - Mellow (`[Endpoint]`/`[EndpointGroup]`, `[RoutingRule]` from rulesets).
-- Share-link exports: `v2ray`, `ss`, `ssr`, `trojan`, `mixed`, `nodelist`, `ssd`, SIP008.
+- Share-link exports: `v2ray`, `ss`, `ssr`, `trojan`, `mixed` (classic
+  SS/SSR/VMess/Trojan subset; VLESS/Hysteria2 link export is a known gap),
+  `nodelist`, `ssd`, SIP008 (`sssub`).
+
+> Supported protocols and node formats grow over time: when a new link scheme,
+> transport (`ws`/`grpc`/`h2`/`http`), or TLS mode (e.g. REALITY) is added,
+> extend the static matrices in `packages/core/tests/` (`protocol-matrix`,
+> `conversion-snapshots`, `format-matrix`) and this list together.
 
 **Rulesets, groups, and settings**
 

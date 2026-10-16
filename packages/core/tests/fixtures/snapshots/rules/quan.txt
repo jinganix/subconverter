@@ -1,0 +1,40 @@
+[SERVER]
+SS-plain = shadowsocks, www.example.com, 1080, chacha20-ietf-poly1305, "password", group=SSProvider
+SS-obfs = shadowsocks, 1.1.1.2, 8388, aes-256-gcm, "pw", group=, obfs=http, obfs-host=www.bing.com
+SSR-test = shadowsocksr, 1.2.3.4, 8388, aes-256-cfb, "pw", group=G, protocol=auth_sha1_v4, obfs=http_simple
+VMESS-v2rayn = vmess, 1.2.3.4, 443, chacha20-ietf-poly1305, "b831381d-6324-4d53-ad4f-8cda48b30811", group=V2RayProvider, over-tls=true, tls-host=h.example.com, obfs=ws, obfs-path="/p", obfs-header="Host: h.example.com"
+VMESS-sr = vmess, 2.2.2.2, 443, chacha20-ietf-poly1305, "b831381d-6324-4d53-ad4f-8cda48b30811", group=V2RayProvider, over-tls=true, tls-host=h.example.com, obfs=ws, obfs-path="/p", obfs-header="Host: h.example.com"
+VMESS-kit = vmess, 3.3.3.3, 443, chacha20-ietf-poly1305, "b831381d-6324-4d53-ad4f-8cda48b30811", group=V2RayProvider, over-tls=true, tls-host=h.example.com, obfs=ws, obfs-path="/", obfs-header="Host: h.example.com"
+VMESS-std = vmess, 4.4.4.4, 443, chacha20-ietf-poly1305, "b831381d-6324-4d53-ad4f-8cda48b30811", group=V2RayProvider, over-tls=true, tls-host=
+SOCKS-tg = socks, upstream-proxy-address=10.10.10.1, upstream-proxy-port=1080, group=SocksProvider, upstream-proxy-auth=true, upstream-proxy-username=u, upstream-proxy-password=p
+HTTP-tg = http, upstream-proxy-address=10.10.10.2, upstream-proxy-port=8080, group=HTTPProvider, upstream-proxy-auth=true, upstream-proxy-username=u, upstream-proxy-password=p
+
+[SOURCE]
+
+[BACKUP-SERVER]
+
+[SUSPEND-SSID]
+
+[POLICY]
+TXlHcm91cCA6IHN0YXRpYywgU1MtcGxhaW4KU1MtcGxhaW4KU1Mtb2JmcwpTU1ItdGVzdApWTUVTUy12MnJheW4KVk1FU1Mtc3IKVk1FU1Mta2l0ClZNRVNTLXN0ZApTT0NLUy10ZwpIVFRQLXRnCg==
+
+[DNS]
+1.1.1.1
+
+[REWRITE]
+
+[URL-REJECTION]
+
+[TCP]
+DOMAIN,example.com,Proxy
+DOMAIN,example.cn,Direct
+
+[GLOBAL]
+
+[HOST]
+
+[STATE]
+STATE,AUTO
+
+[MITM]
+
