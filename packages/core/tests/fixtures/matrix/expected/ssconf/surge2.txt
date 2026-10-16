@@ -1,0 +1,2 @@
+SSCONF-one = custom, 1.2.3.4, 8388, aes-256-gcm, pw, https://github.com/pobizhe/SSEncrypt/raw/master/SSEncrypt.module
+SSCONF-two = custom, 1.2.3.5, 8389, aes-128-gcm, pw2, https://github.com/pobizhe/SSEncrypt/raw/master/SSEncrypt.module

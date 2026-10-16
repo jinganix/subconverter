@@ -25,7 +25,13 @@ export function getUrlArg(query: string, key: string): string {
   if (query === "") {
     return "";
   }
-  const normalized = query.startsWith("?") ? query.slice(1) : query;
+  // Tolerate full links (`tg://socks?server=...`, `vless://...?type=...`):
+  // strip any fragment and everything up to the first `?` so the first
+  // parameter is not swallowed by the scheme prefix.
+  const hashCut = query.split("#", 1)[0] as string;
+  const qIndex = hashCut.indexOf("?");
+  const rawQuery = qIndex >= 0 ? hashCut.slice(qIndex + 1) : hashCut;
+  const normalized = rawQuery.startsWith("?") ? rawQuery.slice(1) : rawQuery;
   const parts = normalized.split("&");
   let found = "";
   const target = key.toLowerCase();

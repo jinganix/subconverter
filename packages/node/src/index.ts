@@ -8,6 +8,9 @@ import {
   type TargetFormat,
   RulesetType,
   createExtraSettings,
+  getDefaultProxyGroups,
+  getDefaultRulesetConfigs,
+  getDefaultRulesets,
   parseSubscription,
 } from "@subconverter/core";
 import { readFile, writeFile } from "node:fs/promises";
@@ -86,6 +89,12 @@ export interface ConvertRequest {
   extraProxyGroup?: ProxyGroupConfig[];
   rulesets?: RulesetConfig[];
   settings?: Partial<ExtraSettings>;
+  /**
+   * When `true` and no explicit `rulesets`/`extraProxyGroup` are given, fall
+   * back to the bundled upstream-like defaults (`ACL4SSR`). When `false`,
+   * rules are stripped. Maps to core `GenerateOptions.includeRules`.
+   */
+  includeRules?: boolean;
 }
 
 /** Resolved inputs for the core generation layer. */
@@ -95,14 +104,7 @@ export interface ConvertInput {
   extraProxyGroup: ProxyGroupConfig[];
   rulesets: RulesetContent[];
   settings: ExtraSettings;
-}
-
-/** Resolved inputs for the core generation layer. */
-export interface ConvertInput {
-  nodes: Proxy[];
-  target: TargetFormat;
-  extraProxyGroup: ProxyGroupConfig[];
-  settings: ExtraSettings;
+  includeRules?: boolean;
 }
 
 const RULESET_TYPE_PREFIXES: Array<[string, RulesetType]> = [
@@ -152,7 +154,9 @@ export async function loadRuleset(
 ): Promise<RulesetContent> {
   const { type, url } = parseRulesetSource(config.url);
   let content = "";
-  if (url.startsWith("http://") || url.startsWith("https://")) {
+  if (url.startsWith("[]")) {
+    content = url;
+  } else if (url.startsWith("http://") || url.startsWith("https://")) {
     content = await fetchSubscription(url, options);
   } else if (url !== "") {
     content = await readSubscriptionFile(url);
@@ -201,10 +205,31 @@ export async function collectNodes(sources: SubscriptionSource[]): Promise<Proxy
 
 /** Build the generation input for a {@link ConvertRequest}. */
 export async function prepareConversion(request: ConvertRequest): Promise<ConvertInput> {
+  const includeRules = request.includeRules;
+  const extraProxyGroup =
+    includeRules === true && (!request.extraProxyGroup || request.extraProxyGroup.length === 0)
+      ? getDefaultProxyGroups()
+      : (request.extraProxyGroup ?? []);
+  let rulesets: RulesetContent[];
+  if (includeRules === false) {
+    rulesets = [];
+  } else if (request.rulesets && request.rulesets.length > 0) {
+    rulesets = await collectRulesets(request.rulesets);
+  } else if (includeRules === true) {
+    // Prefer the full upstream-like remote lists, falling back to the bundled
+    // offline rules when fetching fails (e.g. offline CI).
+    const configs = getDefaultRulesetConfigs();
+    const fetched = await collectRulesets(configs);
+    const hasContent = fetched.some((entry) => entry.content !== "");
+    rulesets = hasContent ? fetched : getDefaultRulesets();
+  } else {
+    rulesets = await collectRulesets(request.rulesets ?? []);
+  }
   return {
-    extraProxyGroup: request.extraProxyGroup ?? [],
+    extraProxyGroup,
+    includeRules,
     nodes: await collectNodes(request.sources),
-    rulesets: await collectRulesets(request.rulesets ?? []),
+    rulesets,
     settings: { ...createExtraSettings(), ...request.settings },
     target: request.target,
   };

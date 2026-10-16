@@ -570,6 +570,8 @@ export interface VlessOptions {
   host?: string;
   path?: string;
   fingerprint?: string;
+  publicKey?: string;
+  shortId?: string;
   alpn?: string[];
   udp?: TriBool;
   tfo?: TriBool;
@@ -602,6 +604,8 @@ export function vlessConstruct(node: Proxy, options: VlessOptions): void {
   node.host = options.host ?? "";
   node.path = options.path ?? "";
   node.fingerprint = options.fingerprint ?? "";
+  node.publicKey = options.publicKey ?? "";
+  node.shortId = options.shortId ?? "";
   if (options.alpn) {
     node.alpn = options.alpn;
   }

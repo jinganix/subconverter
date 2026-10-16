@@ -1,0 +1,5 @@
+shadowsocks = 1.1.1.1:8388, method=aes-256-gcm, password=pw, udp-relay=true, tag=SS-plain
+socks5 = 10.10.10.1:1080, username=u, password=p, over-tls=false, udp-relay=true, tag=Socks-test
+vmess = 3.3.3.1:443, method=chacha20-ietf-poly1305, password=b831381d-6324-4d53-ad4f-8cda48b30811, aead=false, obfs=wss, obfs-host=h.example.com, obfs-uri=/p, tls-verification=false, tag=VMESS-ws
+http = 10.10.10.2:8080, username=u, password=p, over-tls=false, tag=HTTP-test
+trojan = 6.6.6.6:443, password=pw, over-tls=true, tls-host=h.example.com, udp-relay=true, tag=TJ-test

@@ -5,6 +5,7 @@ import {
   BalanceStrategy,
   ProxyGroupType,
   ProxyType,
+  RulesetType,
   TargetFormat,
   createExtraSettings,
   createProxy,
@@ -31,6 +32,7 @@ import {
   vmessConstruct,
   wireGuardConstruct,
 } from "../src/index";
+import type { RulesetContent } from "../src/types/ruleset";
 
 function minimal(type: ProxyType): Proxy {
   const n = createProxy();
@@ -384,5 +386,102 @@ describe("minimal nodes exercise optional branches", () => {
     expect(
       generate([minimal(ProxyType.Shadowsocks)], { settings, target: TargetFormat.SSD }),
     ).toContain("ssd://");
+  });
+
+  it("injects rules across generators", () => {
+    const settings = createExtraSettings();
+    const nodes = [minimal(ProxyType.Shadowsocks)];
+    const rules = { lines: ["DOMAIN,example.com,Proxy"], section: "Rule" };
+
+    expect(
+      toSurge(nodes, [], settings, { baseConf: "", nodeList: false, rules, version: 4 }),
+    ).toContain("DOMAIN,example.com,Proxy");
+    expect(toQuanX(nodes, [], settings, { baseConf: "", nodeList: false, rules })).toContain(
+      "DOMAIN,example.com,Proxy",
+    );
+    expect(toQuan(nodes, [], settings, { baseConf: "", nodeList: false, rules })).toContain(
+      "DOMAIN,example.com,Proxy",
+    );
+    expect(toLoon(nodes, [], settings, { baseConf: "", nodeList: false, rules })).toContain(
+      "DOMAIN,example.com,Proxy",
+    );
+
+    // empty rules lines take the `rules && lines.length > 0` false branch
+    const emptyRules = { lines: [] as string[], section: "Rule" };
+    expect(
+      toSurge(nodes, [], settings, {
+        baseConf: "",
+        nodeList: false,
+        rules: emptyRules,
+        version: 4,
+      }),
+    ).not.toContain("DOMAIN,example.com,Proxy");
+    expect(
+      toQuanX(nodes, [], settings, { baseConf: "", nodeList: false, rules: emptyRules }),
+    ).not.toContain("DOMAIN,example.com,Proxy");
+    expect(
+      toQuan(nodes, [], settings, { baseConf: "", nodeList: false, rules: emptyRules }),
+    ).not.toContain("DOMAIN,example.com,Proxy");
+    expect(
+      toLoon(nodes, [], settings, { baseConf: "", nodeList: false, rules: emptyRules }),
+    ).not.toContain("DOMAIN,example.com,Proxy");
+
+    const rulesets: RulesetContent[] = [
+      {
+        content: "DOMAIN,example.com",
+        ruleGroup: "Proxy",
+        rulePath: "",
+        rulePathTyped: "",
+        ruleType: RulesetType.Surge,
+        updateInterval: 0,
+      },
+    ];
+    expect(toSingBox(nodes, [], settings, { baseConf: "{}", nodeList: false, rulesets })).toContain(
+      "example.com",
+    );
+
+    // generate() with explicit rulesets covers attachClashRules + Surge/QuanX/Quan/Loon/SingBox rule paths
+    expect(
+      generate([minimal(ProxyType.Shadowsocks)], {
+        rulesets,
+        settings,
+        target: TargetFormat.Clash,
+      }),
+    ).toContain("example.com");
+    expect(
+      generate([minimal(ProxyType.Shadowsocks)], {
+        rulesets,
+        settings,
+        target: TargetFormat.Surge,
+      }),
+    ).toContain("example.com");
+    expect(
+      generate([minimal(ProxyType.Shadowsocks)], {
+        rulesets,
+        settings,
+        target: TargetFormat.QuantumultX,
+      }),
+    ).toContain("example.com");
+    expect(
+      generate([minimal(ProxyType.Shadowsocks)], {
+        rulesets,
+        settings,
+        target: TargetFormat.Quantumult,
+      }),
+    ).toContain("example.com");
+    expect(
+      generate([minimal(ProxyType.Shadowsocks)], {
+        rulesets,
+        settings,
+        target: TargetFormat.Loon,
+      }),
+    ).toContain("example.com");
+    expect(
+      generate([minimal(ProxyType.Shadowsocks)], {
+        rulesets,
+        settings,
+        target: TargetFormat.SingBox,
+      }),
+    ).toContain("example.com");
   });
 });

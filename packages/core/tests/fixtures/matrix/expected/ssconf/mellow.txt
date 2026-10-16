@@ -1,0 +1,45 @@
+[Endpoint]
+DIRECT, builtin, freedom, domainStrategy=UseIP
+REJECT, builtin, blackhole
+Dns-Out, builtin, dns
+SSCONF-one, ss, ss://Og@1.2.3.4:8388
+SSCONF-two, ss, ss://Og@1.2.3.5:8389
+
+[Routing]
+domainStrategy=IPIfNonMatch
+
+[Dns]
+clientIp=114.114.114.114
+hijack=Dns-Out
+
+[DnsServer]
+localhost
+223.5.5.5
+8.8.8.8, 53, Remote
+8.8.4.4
+
+[DnsRule]
+DOMAIN-KEYWORD, geosite:geolocation-!cn, Remote
+DOMAIN-SUFFIX, google.com, Remote
+
+[DnsHost]
+doubleclick.net=127.0.0.1
+
+[Log]
+loglevel=warning
+
+[EndpointGroup]
+🔰 节点选择, SSCONF-one:SSCONF-two, latency, interval=300, timeout=6
+♻️ 自动选择, SSCONF-one:SSCONF-two, latency, interval=300, timeout=6
+🎥 NETFLIX, SSCONF-one:SSCONF-two, latency, interval=300, timeout=6
+⛔️ 广告拦截, SSCONF-one:SSCONF-two, latency, interval=300, timeout=6
+🚫 运营劫持, SSCONF-one:SSCONF-two, latency, interval=300, timeout=6
+🌍 国外媒体, SSCONF-one:SSCONF-two, latency, interval=300, timeout=6
+🌏 国内媒体, SSCONF-two, latency, interval=300, timeout=6
+Ⓜ️ 微软服务, SSCONF-one:SSCONF-two, latency, interval=300, timeout=6
+📲 电报信息, SSCONF-one:SSCONF-two, latency, interval=300, timeout=6
+🍎 苹果服务, SSCONF-one:SSCONF-two, latency, interval=300, timeout=6
+🎯 全球直连, SSCONF-one:SSCONF-two, latency, interval=300, timeout=6
+🛑 全球拦截, SSCONF-one:SSCONF-two, latency, interval=300, timeout=6
+🐟 漏网之鱼, SSCONF-one:SSCONF-two, latency, interval=300, timeout=6
+

@@ -1,0 +1,16 @@
+ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpwYXNzd29yZA==@www.example.com:1080#SS-plain
+ss://YWVzLTI1Ni1nY206cHc=@1.1.1.2:8388?plugin=obfs-local%3Bobfs%3Dhttp%3Bobfs-host%3Dwww.bing.com#SS-obfs
+ssr://MS4yLjMuNDo4Mzg4OmF1dGhfc2hhMV92NDphZXMtMjU2LWNmYjpodHRwX3NpbXBsZTpjSGMvP29iZnNwYXJhbT0mcHJvdG9wYXJhbT0mcmVtYXJrcz1VMU5TTFhSbGMzUSZncm91cD1Sdw==
+vmess://eyJ2IjoiMiIsInBzIjoiVk1FU1MtdjJyYXluIiwiYWRkIjoiMS4yLjMuNCIsInBvcnQiOjQ0MywiaWQiOiJiODMxMzgxZC02MzI0LTRkNTMtYWQ0Zi04Y2RhNDhiMzA4MTEiLCJhaWQiOjAsIm5ldCI6IndzIiwidHlwZSI6Im5vbmUiLCJob3N0IjoiaC5leGFtcGxlLmNvbSIsInBhdGgiOiIvcCIsInRscyI6InRscyJ9
+vmess://YXV0bzpiODMxMzgxZC02MzI0LTRkNTMtYWQ0Zi04Y2RhNDhiMzA4MTFAMi4yLjIuMjo0NDM?remarks=VMESS-sr&obfs=websocket&obfsParam=h.example.com&path=/p&tls=1
+vmess1://b831381d-6324-4d53-ad4f-8cda48b30811@3.3.3.3:443/?network=ws&tls=true&ws.host=h.example.com#VMESS-kit
+vmess://tcp+tls:b831381d-6324-4d53-ad4f-8cda48b30811-0@4.4.4.4:443#VMESS-std
+vless://b831381d-6324-4d53-ad4f-8cda48b30811@5.5.5.5:443?encryption=none&security=tls&sni=h.example.com&type=ws&host=h.example.com&path=%2Fp#VLESS-test
+trojan://pw@6.6.6.6:443?sni=h.example.com#TJ-test
+trojan://pw@6.6.6.7:443?sni=h.example.com&type=ws&path=%2Fws#TJ-ws
+hysteria2://pw@7.7.7.7:443?sni=h.example.com&up=50&down=100&obfs=salamander&obfs-password=obfspw&alpn=h3#HY2-test
+hy2://pw@7.7.7.8:443?sni=h.example.com#HY2-short
+anytls://pw@8.8.8.8:443?sni=h.example.com#AT-test
+tuic://b831381d-6324-4d53-ad4f-8cda48b30811:pw@9.9.9.9:443?sni=h.example.com&congestion_control=bbr&alpn=h3#TU-test
+tg://socks?server=10.10.10.1&port=1080&user=u&pass=p&remarks=SOCKS-tg
+tg://http?server=10.10.10.2&port=8080&user=u&pass=p&remarks=HTTP-tg

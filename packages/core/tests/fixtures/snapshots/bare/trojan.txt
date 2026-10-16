@@ -1,0 +1,2 @@
+trojan://pw@6.6.6.6:443?allowInsecure=0&sni=h.example.com#TJ-test
+trojan://pw@6.6.6.7:443?allowInsecure=0&sni=h.example.com&ws=1&wspath=%2Fws#TJ-ws

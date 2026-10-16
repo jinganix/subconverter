@@ -62,10 +62,50 @@ function buildLoonNode(x: Proxy, settings: ExtraSettings, remark: string): strin
         proxy += `,skip-cert-verify=${scv ? "true" : "false"}`;
       }
       break;
+    case ProxyType.VLESS:
+      if (
+        x.transferProtocol !== "" &&
+        x.transferProtocol !== "tcp" &&
+        x.transferProtocol !== "ws"
+      ) {
+        return undefined;
+      }
+      proxy = `VLESS,${hostname},${port},"${x.userId}"`;
+      if (x.flow !== "") {
+        proxy += `,flow=${x.flow}`;
+      }
+      if (x.publicKey !== "") {
+        proxy += `,public-key="${x.publicKey}"`;
+      }
+      if (x.shortId !== "") {
+        proxy += `,short-id=${x.shortId}`;
+      }
+      if (x.transferProtocol === "ws") {
+        proxy += `,path=${x.path},host=${x.host}`;
+      }
+      proxy += `,transport=${x.transferProtocol === "ws" ? "ws" : "tcp"}`;
+      if (x.udp !== undefined) {
+        proxy += `,udp=${x.udp ? "true" : "false"}`;
+      } else {
+        proxy += ",udp=false";
+      }
+      proxy += `,over-tls=${x.tlsSecure ? "true" : "false"}`;
+      if (x.tlsSecure && x.serverName !== "") {
+        proxy += `,sni=${x.serverName}`;
+      }
+      if (scv !== undefined) {
+        proxy += `,skip-cert-verify=${scv ? "true" : "false"}`;
+      }
+      break;
     case ProxyType.Trojan:
       proxy = `trojan,${hostname},${port},"${x.password}"`;
       if (x.host !== "") {
         proxy += `,tls-name=${x.host}`;
+      }
+      if (x.transferProtocol === "ws") {
+        proxy += `,transport=ws,path=${x.path},host=${x.host}`;
+      } else {
+        proxy += ",transport=tcp";
       }
       if (scv !== undefined) {
         proxy += `,skip-cert-verify=${scv ? "true" : "false"}`;
@@ -108,26 +148,25 @@ function buildLoonNode(x: Proxy, settings: ExtraSettings, remark: string): strin
       proxy += `, peers=[{${generatePeer(x, true)}}]`;
       break;
     case ProxyType.Hysteria2:
-      proxy = `hysteria2,${hostname},${port},"${x.password}"`;
+      proxy = `Hysteria2,${hostname},${port},"${x.password}"`;
+      if (x.sni !== "") {
+        proxy += `,sni=${x.sni}`;
+      }
+      // NOTE: some converters emit `download-bandwidth` from the *up*
+      // value (and a default 100 when unset), which contradicts the
+      // Hysteria2 spec. Emit the actual `down` speed instead; omit when unset.
+      if (x.downSpeed > 0) {
+        proxy += `,download-bandwidth=${x.downSpeed}`;
+      }
       if (scv !== undefined) {
         proxy += `,skip-cert-verify=${scv ? "true" : "false"}`;
       }
       if (x.fingerprint !== "") {
         proxy += `,tls-cert-sha256=${x.fingerprint}`;
       }
-      if (x.sni !== "") {
-        proxy += `,sni=${x.sni}`;
-      }
       break;
-    case ProxyType.AnyTLS:
-      proxy = `anytls,${hostname},${port},"${x.password}"`;
-      if (x.sni !== "") {
-        proxy += `,sni=${x.sni}`;
-      }
-      if (scv !== undefined) {
-        proxy += `,skip-cert-verify=${scv ? "true" : "false"}`;
-      }
-      break;
+    // Loon has no AnyTLS/TUIC mapping — keep the drop instead of
+    // emitting non-standard lines.
     default:
       return undefined;
   }
@@ -192,6 +231,8 @@ function buildLoonGroups(extraProxyGroup: ProxyGroupConfig[], nodelist: Proxy[])
 export interface LoonOptions {
   baseConf: string;
   nodeList: boolean;
+  /** Rule lines to inject, plus the section name to place them in. */
+  rules?: { section: string; lines: string[] };
 }
 
 /** Convert nodes into a Loon configuration string. */
@@ -229,6 +270,9 @@ export function toLoon(
   const groupLines = buildLoonGroups(extraProxyGroup, nodelist);
   if (groupLines.length > 0) {
     setRawSection(sections, "Proxy Group", groupLines);
+  }
+  if (options.rules && options.rules.lines.length > 0) {
+    setRawSection(sections, options.rules.section, options.rules.lines);
   }
   return renderRawIni(sections);
 }

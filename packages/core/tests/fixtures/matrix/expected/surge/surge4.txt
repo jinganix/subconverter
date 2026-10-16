@@ -1,0 +1,8 @@
+SS-plain = ss, 1.1.1.1, 8388, encrypt-method=aes-256-gcm, password=pw, udp-relay=true
+Socks-test = socks5, 10.10.10.1, 1080, username=u, password=p, udp-relay=true
+VMESS-ws = vmess, 3.3.3.1, 443, username=b831381d-6324-4d53-ad4f-8cda48b30811, tls=true, vmess-aead=false, ws=true, ws-path=/p, sni=h.example.com, ws-headers=Host:h.example.com, skip-cert-verify=true
+HTTP-test = http, 10.10.10.2, 8080, username=u, password=p, tls=false
+TJ-test = trojan, 6.6.6.6, 443, password=pw, sni=h.example.com, udp-relay=true
+Snell-test = snell, 8.8.8.1, 443, psk=pw, obfs=http, obfs-host=h.example.com, version=3
+AnyTLS-test = anytls, 8.8.8.8, 443, password=pw, sni=h.example.com
+WG-test = wireguard, section-name=MEzT6, test-url=http://www.gstatic.com/generate_204

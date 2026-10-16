@@ -17,7 +17,7 @@ import {
   TargetFormat,
 } from "../src/index";
 
-describe("upstream regression: ISSUE 897 / PR 849 — ss special characters", () => {
+describe("regression: ISSUE 897 / PR 849 — ss special characters", () => {
   it("round-trips an SS2022 password containing base64-significant characters", () => {
     const password = "pa/ss+word/with+special==";
     const link = `ss://${base64Encode(`2022-blake3-aes-256-gcm:${password}`)}@1.2.3.4:8388#SS2022`;
@@ -28,7 +28,7 @@ describe("upstream regression: ISSUE 897 / PR 849 — ss special characters", ()
   });
 });
 
-describe("upstream regression: ISSUE 877 — net:+tls standard vmess", () => {
+describe("regression: ISSUE 877 — net:+tls standard vmess", () => {
   it("parses tcp+tls standard vmess links", () => {
     const node = parseLink(
       "vmess://tcp+tls:b831381d-6324-4d53-ad4f-8cda48b30811-0@1.2.3.4:443#TCPTLS",
@@ -39,7 +39,7 @@ describe("upstream regression: ISSUE 877 — net:+tls standard vmess", () => {
   });
 });
 
-describe("upstream regression: PR 889 / 876 — hysteria2 port ranges", () => {
+describe("regression: PR 889 / 876 — hysteria2 port ranges", () => {
   it("imports mport/ports and exports sing-box server_ports", () => {
     const node = parseLink("hysteria2://pw@1.2.3.4:443?mport=443,500-600&up=50&down=100#HY2");
     expect(node?.type).toBe(ProxyType.Hysteria2);
@@ -51,7 +51,7 @@ describe("upstream regression: PR 889 / 876 — hysteria2 port ranges", () => {
   });
 });
 
-describe("upstream regression: PR 904 / 903 — hysteria2 bandwidth and fingerprint", () => {
+describe("regression: PR 904 / 903 — hysteria2 bandwidth and fingerprint", () => {
   it("keeps up/down bandwidth and fingerprint on clash export", () => {
     const node = createProxy();
     hysteria2Construct(node, {
@@ -76,7 +76,7 @@ describe("upstream regression: PR 904 / 903 — hysteria2 bandwidth and fingerpr
   });
 });
 
-describe("upstream regression: PR 848 / ISSUE 881 — clash dialer-proxy", () => {
+describe("regression: PR 848 / ISSUE 881 — clash dialer-proxy", () => {
   it("emits and re-parses dialer-proxy with the new field names", () => {
     const node = createProxy();
     node.type = ProxyType.Trojan;
@@ -95,7 +95,7 @@ describe("upstream regression: PR 848 / ISSUE 881 — clash dialer-proxy", () =>
   });
 });
 
-describe("upstream regression: PR 840 / ISSUE 855 — wireguard preshared-key and keepalive", () => {
+describe("regression: PR 840 / ISSUE 855 — wireguard preshared-key and keepalive", () => {
   it("exports preshared-key and keepalive for Surge/Loon", () => {
     const node = createProxy();
     wireGuardConstruct(node, {
@@ -120,7 +120,7 @@ describe("upstream regression: PR 840 / ISSUE 855 — wireguard preshared-key an
   });
 });
 
-describe("upstream regression: PR 898 — identification headers", () => {
+describe("regression: PR 898 — identification headers", () => {
   it("uses a neutral default User-Agent helper string", () => {
     // The UA is applied by the node adapter; core generation must not embed it.
     const settings = createExtraSettings();

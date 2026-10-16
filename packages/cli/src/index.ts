@@ -1,16 +1,20 @@
 import {
   type ExtraSettings,
   type ProxyGroupConfig,
+  type RulesetConfig,
+  type RulesetContent,
   BalanceStrategy,
   ProxyGroupType,
   ProxyType,
   TargetFormat,
   generate,
+  parseExternalConfig,
   parseLink,
+  parseRulesetConfig,
   parseSubscription,
   proxyTypeName,
 } from "@subconverter/core";
-import { fetchSubscription, writeOutputFile } from "@subconverter/node";
+import { collectRulesets, fetchSubscription, writeOutputFile } from "@subconverter/node";
 import { readFile } from "node:fs/promises";
 
 const TARGET_VALUES = new Set(Object.values(TargetFormat));
@@ -48,6 +52,8 @@ const BOOLEAN_FLAGS = new Set([
   "new-field-name",
   "classical-ruleset",
   "dedupe",
+  "with-rules",
+  "no-rules",
   "version",
   "help",
 ]);
@@ -148,6 +154,11 @@ Convert options:
       --new-field-name  Use Clash's new field names (proxies/proxy-groups)
       --dedupe          Drop duplicate nodes (same type/server/port/name)
       --surge-version <n> Surge version for the surge target (default 4)
+      --with-rules      Attach rules + default proxy groups (like upstream config=ACL4SSR.ini)
+      --no-rules        Never emit rules, even if --ruleset/--config is given
+      --ruleset <g,u>   Ruleset: group,url[,interval] or group,[]RULE (repeatable)
+      --config <p|url>  External INI config with [custom] ruleset/groups (like upstream config=)
+      --base <path>     Base config file merged under generated proxies/groups/rules
   -h, --help            Show this help
 `;
 
@@ -261,8 +272,69 @@ async function runConvert(state: ArgState): Promise<number> {
     sortFlag: flagBool(state, "sort"),
   };
 
+  // Rule handling (mirrors upstream `config=` + `ruleset=`).
+  const rulesetConfigs: RulesetConfig[] = [];
+  for (const raw of flagAll(state, "ruleset")) {
+    const parsed = parseRulesetConfig(raw);
+    if (parsed) {
+      rulesetConfigs.push(parsed);
+    }
+  }
+  const configSource = flag(state, "config");
+  if (configSource) {
+    const raw =
+      /^https?:\/\//i.test(configSource) || configSource === "-"
+        ? configSource === "-"
+          ? await readStdin()
+          : await fetchSubscription(configSource)
+        : await readFile(configSource, "utf-8");
+    const external = parseExternalConfig(raw);
+    groups.push(...external.groups);
+    rulesetConfigs.push(...external.rulesets);
+    if (external.rename.length > 0) {
+      settings.renameArray = [...(settings.renameArray ?? []), ...external.rename];
+    }
+    if (external.emoji.length > 0) {
+      settings.emojiArray = [...(settings.emojiArray ?? []), ...external.emoji];
+    }
+    settings.enableRuleGenerator = external.enableRuleGenerator;
+    settings.overwriteOriginalRules = external.overwriteOriginalRules;
+    if (external.addEmoji) {
+      settings.addEmoji = true;
+    }
+    if (external.removeEmoji) {
+      settings.removeEmoji = true;
+    }
+  }
+  let rulesets: RulesetContent[] | undefined;
+  if (rulesetConfigs.length > 0) {
+    rulesets = await collectRulesets(rulesetConfigs);
+  }
+
+  let baseConf = "";
+  const basePath = flag(state, "base");
+  if (basePath) {
+    baseConf = /^https?:\/\//i.test(basePath)
+      ? await fetchSubscription(basePath)
+      : await readFile(basePath, "utf-8");
+  }
+
+  // `--with-rules` opts into bundled upstream-like defaults (offline);
+  // `--ruleset`/`--config` imply it unless `--no-rules` strips everything.
+  let includeRules: boolean | undefined;
+  if (flagBool(state, "no-rules")) {
+    includeRules = false;
+  } else if (flagBool(state, "with-rules")) {
+    includeRules = true;
+  } else if (rulesetConfigs.length > 0 || configSource) {
+    includeRules = true;
+  }
+
   const output = generate(nodes, {
+    baseConf,
     groups,
+    includeRules,
+    rulesets,
     settings,
     surgeVersion: Number(flag(state, "surge-version") ?? 4),
     target,

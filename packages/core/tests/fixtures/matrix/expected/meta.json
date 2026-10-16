@@ -1,0 +1,25 @@
+{
+  "inputs": ["links-all", "clash", "surge", "ssd", "sub-base64", "ssconf"],
+  "modes": ["bare"],
+  "note": "Static bare snapshots (nodes only, no groups/rules). See tests/fixtures/snapshots/ for bare plus nodes-groups-rules snapshots. Edit fixtures and tests together when behavior changes.",
+  "targets": [
+    "clash",
+    "clashr",
+    "surge2",
+    "surge3",
+    "surge4",
+    "surfboard",
+    "quan",
+    "quanx",
+    "loon",
+    "mellow",
+    "singbox",
+    "ss",
+    "sssub",
+    "ssd",
+    "ssr",
+    "v2ray",
+    "trojan",
+    "mixed"
+  ]
+}

@@ -1,0 +1,4 @@
+SS-plain = custom, 1.1.1.1, 8388, aes-256-gcm, pw, https://github.com/pobizhe/SSEncrypt/raw/master/SSEncrypt.module, udp-relay=true
+Socks-test = socks5, 10.10.10.1, 1080, username=u, password=p, udp-relay=true
+HTTP-test = http, 10.10.10.2, 8080, username=u, password=p, tls=false
+Snell-test = snell, 8.8.8.1, 443, psk=pw, obfs=http, obfs-host=h.example.com, version=3

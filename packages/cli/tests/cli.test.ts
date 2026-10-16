@@ -105,4 +105,65 @@ describe("cli e2e", () => {
     expect(await runCli(["convert", "--file", path, "--target", "clash"])).toBe(1);
     expect(stderr).toContain("No proxy nodes");
   });
+
+  it("emits no rules by default but attaches them with --with-rules", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#A");
+    stdout = "";
+    expect(await runCli(["convert", "--file", path, "--target", "clash"])).toBe(0);
+    expect(stdout).not.toContain("GEOIP,CN");
+    stdout = "";
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "clash",
+        "--with-rules",
+        "--new-field-name",
+      ]),
+    ).toBe(0);
+    expect(stdout).toContain("proxy-groups:");
+    expect(stdout).toContain("rules:");
+    expect(stdout).toContain("GEOIP,CN");
+  });
+
+  it("loads inline rulesets via --ruleset and strips them with --no-rules", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#A");
+    stdout = "";
+    expect(
+      await runCli(["convert", "--file", path, "--target", "clash", "--ruleset", "G,[]GEOIP,CN"]),
+    ).toBe(0);
+    expect(stdout).toContain("GEOIP,CN");
+    stdout = "";
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "clash",
+        "--ruleset",
+        "G,[]GEOIP,CN",
+        "--no-rules",
+      ]),
+    ).toBe(0);
+    expect(stdout).not.toContain("GEOIP,CN");
+  });
+
+  it("loads groups and rules from --config", async () => {
+    const sub = await writeSub("trojan://pw@1.2.3.4:443#A");
+    const configPath = join(dir, "external.ini");
+    await writeFile(
+      configPath,
+      "[custom]\nruleset=G,[]GEOIP,CN\ncustom_proxy_group=MyGroup`select`.*\n",
+      "utf-8",
+    );
+    stdout = "";
+    expect(
+      await runCli(["convert", "--file", sub, "--target", "clash", "--config", configPath]),
+    ).toBe(0);
+    expect(stdout).toContain("GEOIP,CN");
+    expect(stdout).toContain("MyGroup");
+  });
 });

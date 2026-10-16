@@ -1,0 +1,1 @@
+{"outbounds":[{"type":"shadowsocks","tag":"SSCONF-one","server":"1.2.3.4","server_port":8388,"method":"aes-256-gcm","password":"pw"},{"type":"shadowsocks","tag":"SSCONF-two","server":"1.2.3.5","server_port":8389,"method":"aes-128-gcm","password":"pw2"}]}

@@ -1,0 +1,47 @@
+[Endpoint]
+DIRECT, builtin, freedom, domainStrategy=UseIP
+REJECT, builtin, blackhole
+Dns-Out, builtin, dns
+SS-plain, ss, ss://Og@1.1.1.1:8388
+Socks-test, builtin, socks, address=10.10.10.1, port=1080, user=, pass=
+VMESS-ws, vmess1, vmess1://@3.3.3.1:443?network=&tls=&tls.allowinsecure=true
+HTTP-test, builtin, http, address=10.10.10.2, port=8080, user=, pass=
+
+[Routing]
+domainStrategy=IPIfNonMatch
+
+[Dns]
+clientIp=114.114.114.114
+hijack=Dns-Out
+
+[DnsServer]
+localhost
+223.5.5.5
+8.8.8.8, 53, Remote
+8.8.4.4
+
+[DnsRule]
+DOMAIN-KEYWORD, geosite:geolocation-!cn, Remote
+DOMAIN-SUFFIX, google.com, Remote
+
+[DnsHost]
+doubleclick.net=127.0.0.1
+
+[Log]
+loglevel=warning
+
+[EndpointGroup]
+🔰 节点选择, SS-plain:Socks-test:VMESS-ws:HTTP-test, latency, interval=300, timeout=6
+♻️ 自动选择, SS-plain:Socks-test:VMESS-ws:HTTP-test, latency, interval=300, timeout=6
+🎥 NETFLIX, SS-plain:Socks-test:VMESS-ws:HTTP-test, latency, interval=300, timeout=6
+⛔️ 广告拦截, SS-plain:Socks-test:VMESS-ws:HTTP-test, latency, interval=300, timeout=6
+🚫 运营劫持, SS-plain:Socks-test:VMESS-ws:HTTP-test, latency, interval=300, timeout=6
+🌍 国外媒体, SS-plain:Socks-test:VMESS-ws:HTTP-test, latency, interval=300, timeout=6
+🌏 国内媒体, SS-plain:Socks-test:VMESS-ws:HTTP-test, latency, interval=300, timeout=6
+Ⓜ️ 微软服务, SS-plain:Socks-test:VMESS-ws:HTTP-test, latency, interval=300, timeout=6
+📲 电报信息, SS-plain:Socks-test:VMESS-ws:HTTP-test, latency, interval=300, timeout=6
+🍎 苹果服务, SS-plain:Socks-test:VMESS-ws:HTTP-test, latency, interval=300, timeout=6
+🎯 全球直连, SS-plain:Socks-test:VMESS-ws:HTTP-test, latency, interval=300, timeout=6
+🛑 全球拦截, SS-plain:Socks-test:VMESS-ws:HTTP-test, latency, interval=300, timeout=6
+🐟 漏网之鱼, SS-plain:Socks-test:VMESS-ws:HTTP-test, latency, interval=300, timeout=6
+

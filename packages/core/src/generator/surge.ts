@@ -237,6 +237,14 @@ function buildSurge(
         if (x.host !== "") {
           proxy += `, sni=${x.host}`;
         }
+        if (x.transferProtocol === "ws") {
+          proxy += ", ws=true";
+          if (x.path !== "") {
+            proxy += `, ws-path=${x.path}`;
+          }
+          const wsHost = x.host !== "" ? x.host : x.hostname;
+          proxy += `, ws-headers=Host:"${wsHost}"`;
+        }
         if (scv !== undefined) {
           proxy += `, skip-cert-verify=${triStr(scv)}`;
         }
@@ -282,7 +290,7 @@ function buildSurge(
         if (surgeVer < 4) {
           continue;
         }
-        proxy = `hysteria, ${x.hostname}, ${x.port}, password=${x.password}`;
+        proxy = `hysteria2, ${x.hostname}, ${x.port}, password=${x.password}`;
         if (x.downSpeed) {
           proxy += `, download-bandwidth=${x.downSpeed}`;
         }

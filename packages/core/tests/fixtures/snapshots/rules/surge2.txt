@@ -1,0 +1,27 @@
+#!MANAGED-CONFIG STRIPPED (request host removed; see meta.json)
+
+[General]
+loglevel = notify
+bypass-system = true
+skip-proxy = 127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,100.64.0.0/10,localhost,*.local,e.crashlytics.com,captive.apple.com,::ffff:0:0:0:0/1,::ffff:128:0:0:0/1
+#DNS设置或根据自己网络情况进行相应设置
+bypass-tun = 192.168.0.0/16,10.0.0.0/8,172.16.0.0/12
+dns-server = 119.29.29.29,223.5.5.5
+
+[Script]
+http-request https?:\/\/.*\.iqiyi\.com\/.*authcookie= script-path=https://raw.githubusercontent.com/NobyDa/Script/master/iQIYI-DailyBonus/iQIYI.js
+
+[Proxy]
+DIRECT = direct
+SS-plain = custom, www.example.com, 1080, chacha20-ietf-poly1305, password, https://github.com/pobizhe/SSEncrypt/raw/master/SSEncrypt.module
+SS-obfs = custom, 1.1.1.2, 8388, aes-256-gcm, pw, https://github.com/pobizhe/SSEncrypt/raw/master/SSEncrypt.module,obfs=http,obfs-host=www.bing.com
+SOCKS-tg = socks5, 10.10.10.1, 1080, username=u, password=p
+HTTP-tg = http, 10.10.10.2, 8080, username=u, password=p, tls=false
+
+[Proxy Group]
+MyGroup = select,SS-plain,SS-obfs,SOCKS-tg,HTTP-tg
+
+[Rule]
+DOMAIN,example.com,Proxy
+DOMAIN,example.cn,Direct
+
