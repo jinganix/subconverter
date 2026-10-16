@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.nx/
+.tmp/
+.DS_Store
+*.log
+
+# env files (opt in the example file to commit it)
+.env*
+!.env.local.example
+
+# editors
+.idea/

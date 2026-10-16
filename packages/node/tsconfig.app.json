@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "paths": {
+      "@subconverter/core": ["../core/src/index.ts"],
+      "@subconverter/core/*": ["../core/src/*"]
+    }
+  },
+  "include": ["src", "tests"]
+}

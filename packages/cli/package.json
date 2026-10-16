@@ -1,0 +1,44 @@
+{
+  "name": "@subconverter/cli",
+  "version": "0.1.0",
+  "description": "Command-line interface for subconverter-ts.",
+  "license": "GPL-3.0",
+  "type": "module",
+  "bin": {
+    "subconverter": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "nx": {
+    "tags": [
+      "scope:cli",
+      "type:app"
+    ]
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "npm run typecheck:tsc && npm run lint",
+    "typecheck:tsc": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "lint": "eslint src \"*.ts\" --no-error-on-unmatched-pattern --max-warnings 0",
+    "lint:fix": "eslint src \"*.ts\" --no-error-on-unmatched-pattern --fix",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@subconverter/core": "*",
+    "@subconverter/node": "*"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.3"
+  }
+}
