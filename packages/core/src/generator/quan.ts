@@ -184,6 +184,8 @@ function buildQuanGroups(extraProxyGroup: ProxyGroupConfig[], nodelist: Proxy[])
 export interface QuanOptions {
   baseConf: string;
   nodeList: boolean;
+  /** Rule lines to inject, plus the section name to place them in. */
+  rules?: { section: string; lines: string[] };
 }
 
 /** Convert nodes into a Quantumult configuration string. */
@@ -221,6 +223,9 @@ export function toQuan(
   const groupLines = buildQuanGroups(extraProxyGroup, nodelist);
   if (groupLines.length > 0) {
     setRawSection(sections, "POLICY", groupLines);
+  }
+  if (options.rules && options.rules.lines.length > 0) {
+    setRawSection(sections, options.rules.section, options.rules.lines);
   }
   return renderRawIni(sections);
 }

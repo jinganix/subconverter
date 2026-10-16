@@ -35,7 +35,8 @@
     "lint:fix": "eslint src tests \"*.ts\" .prettierrc.* eslint.config.js --no-error-on-unmatched-pattern --fix",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "fetch:upstream": "node scripts/fetch-upstream.mjs"
   },
   "dependencies": {
     "yaml": "^2.8.1"

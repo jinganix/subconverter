@@ -1,0 +1,10 @@
+shadowsocks = 1.1.1.1:8388, method=aes-256-gcm, password=pw, udp-relay=true, tag=SS-plain
+shadowsocks = 1.1.1.2:8388, method=aes-256-gcm, password=pw, obfs=http, obfs-host=bing.com, tag=SS-obfs
+shadowsocks = 2.2.2.1:8388, method=aes-256-cfb, password=pw, ssr-protocol=auth_sha1_v4, ssr-protocol-param=pp, obfs=http_simple, obfs-host=op, tag=SSR-test
+vmess = 3.3.3.1:443, method=chacha20-ietf-poly1305, password=b831381d-6324-4d53-ad4f-8cda48b30811, obfs=wss, obfs-host=h.example.com, obfs-uri=/p, tag=VMESS-ws
+vmess = 3.3.3.2:443, method=chacha20-ietf-poly1305, password=b831381d-6324-4d53-ad4f-8cda48b30811, obfs=over-tls, obfs-host=, tag=VMESS-grpc
+vless = 5.5.5.5:443, method=none, password=b831381d-6324-4d53-ad4f-8cda48b30811, obfs=wss, obfs-host=h.example.com, obfs-uri=/p, tag=VLESS-ws
+trojan = 6.6.6.6:443, password=pw, over-tls=true, tls-host=h.example.com, tag=TJ-test
+trojan = 6.6.6.7:443, password=pw, over-tls=true, tls-host=h.example.com, tag=TJ-ws
+socks5 = 10.10.10.1:1080, username=u, password=p, over-tls=false, tag=SOCKS-tg
+http = 10.10.10.2:8080, username=u, password=p, over-tls=false, tag=HTTP-tg

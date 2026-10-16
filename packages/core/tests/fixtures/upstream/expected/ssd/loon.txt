@@ -1,0 +1,2 @@
+SSD-one = Shadowsocks,1.2.3.4,8388,aes-256-gcm,"pw"
+SSD-two = Shadowsocks,1.2.3.5,8389,aes-128-gcm,"pw2",http

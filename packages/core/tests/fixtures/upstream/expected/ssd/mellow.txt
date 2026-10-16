@@ -1,0 +1,44 @@
+[Endpoint]
+DIRECT, builtin, freedom, domainStrategy=UseIP
+REJECT, builtin, blackhole
+Dns-Out, builtin, dns
+SSD-one, ss, ss://Og@1.2.3.4:8388
+
+[Routing]
+domainStrategy=IPIfNonMatch
+
+[Dns]
+clientIp=114.114.114.114
+hijack=Dns-Out
+
+[DnsServer]
+localhost
+223.5.5.5
+8.8.8.8, 53, Remote
+8.8.4.4
+
+[DnsRule]
+DOMAIN-KEYWORD, geosite:geolocation-!cn, Remote
+DOMAIN-SUFFIX, google.com, Remote
+
+[DnsHost]
+doubleclick.net=127.0.0.1
+
+[Log]
+loglevel=warning
+
+[EndpointGroup]
+🔰 节点选择, SSD-one, latency, interval=300, timeout=6
+♻️ 自动选择, SSD-one, latency, interval=300, timeout=6
+🎥 NETFLIX, SSD-one, latency, interval=300, timeout=6
+⛔️ 广告拦截, SSD-one, latency, interval=300, timeout=6
+🚫 运营劫持, SSD-one, latency, interval=300, timeout=6
+🌍 国外媒体, SSD-one, latency, interval=300, timeout=6
+🌏 国内媒体, SSD-one, latency, interval=300, timeout=6
+Ⓜ️ 微软服务, SSD-one, latency, interval=300, timeout=6
+📲 电报信息, SSD-one, latency, interval=300, timeout=6
+🍎 苹果服务, SSD-one, latency, interval=300, timeout=6
+🎯 全球直连, SSD-one, latency, interval=300, timeout=6
+🛑 全球拦截, SSD-one, latency, interval=300, timeout=6
+🐟 漏网之鱼, SSD-one, latency, interval=300, timeout=6
+

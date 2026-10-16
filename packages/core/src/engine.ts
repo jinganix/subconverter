@@ -1,4 +1,5 @@
 import { buildClash, stringifyClash } from "./generator/clash";
+import { getDefaultProxyGroups, getDefaultRulesets } from "./generator/default-profile";
 import { proxyToSingle, proxyToSsd, proxyToSsSub } from "./generator/links";
 import { toLoon } from "./generator/loon";
 import { toMellow } from "./generator/mellow";
@@ -22,6 +23,18 @@ export interface GenerateOptions {
   baseConf?: string;
   surgeVersion?: number;
   rulesets?: RulesetContent[];
+  /**
+   * Whether to attach rules (and default proxy groups) like upstream
+   * `tindy2013/subconverter` does with e.g. `config=ACL4SSR.ini`.
+   *
+   * - `true`: emit rules; when `rulesets` is empty, fall back to the bundled
+   *   offline defaults. When `groups` is empty, fall back to the bundled
+   *   default proxy groups so rule references resolve.
+   * - `false`: never emit rules, even if `rulesets` are provided.
+   * - `undefined` (default): legacy behavior — emit `rulesets` only when
+   *   explicitly provided, preserving backward compatibility.
+   */
+  includeRules?: boolean;
 }
 
 const V2RAY_TYPE_MASK = 1 | 2 | 4 | 8;
@@ -49,59 +62,63 @@ export function runPreprocess(nodes: Proxy[], settings: ExtraSettings): void {
 export function generate(nodes: Proxy[], options: GenerateOptions): string {
   const settings: ExtraSettings = { ...createExtraSettings(), ...options.settings };
   runPreprocess(nodes, settings);
+  const groups = resolveGroups(options);
+  const rulesets = resolveRulesets(options, settings);
 
   switch (options.target) {
     case TargetFormat.Clash:
     case TargetFormat.ClashR: {
-      const { doc } = buildClash(
-        nodes,
-        options.groups ?? [],
-        settings,
-        options.target === TargetFormat.ClashR,
-      );
-      attachClashRules(doc, settings, options.rulesets);
+      const { doc } = buildClash(nodes, groups, settings, options.target === TargetFormat.ClashR);
+      attachClashRules(doc, settings, rulesets);
       return stringifyClash(doc);
     }
     case TargetFormat.Surge: {
       const surgeVersion = options.surgeVersion ?? 4;
-      const rules = options.rulesets
-        ? rulesetToSurgeRules(options.rulesets, surgeVersion)
-        : undefined;
-      return toSurge(nodes, options.groups ?? [], settings, {
+      const rules = rulesets ? rulesetToSurgeRules(rulesets, surgeVersion) : undefined;
+      return toSurge(nodes, groups, settings, {
         baseConf: options.baseConf ?? "",
         nodeList: settings.nodeList,
         rules,
         version: surgeVersion,
       });
     }
-    case TargetFormat.QuantumultX:
-      return toQuanX(nodes, options.groups ?? [], settings, {
+    case TargetFormat.QuantumultX: {
+      const rules = rulesets ? rulesetToSurgeRules(rulesets, -1) : undefined;
+      return toQuanX(nodes, groups, settings, {
         baseConf: options.baseConf ?? "",
         nodeList: settings.nodeList,
+        rules,
       });
-    case TargetFormat.Quantumult:
-      return toQuan(nodes, options.groups ?? [], settings, {
+    }
+    case TargetFormat.Quantumult: {
+      const rules = rulesets ? rulesetToSurgeRules(rulesets, -2) : undefined;
+      return toQuan(nodes, groups, settings, {
         baseConf: options.baseConf ?? "",
         nodeList: settings.nodeList,
+        rules,
       });
-    case TargetFormat.Loon:
-      return toLoon(nodes, options.groups ?? [], settings, {
+    }
+    case TargetFormat.Loon: {
+      const rules = rulesets ? rulesetToSurgeRules(rulesets, -4) : undefined;
+      return toLoon(nodes, groups, settings, {
         baseConf: options.baseConf ?? "",
         nodeList: settings.nodeList,
+        rules,
       });
+    }
     case TargetFormat.SingBox:
-      return toSingBox(nodes, options.groups ?? [], settings, {
+      return toSingBox(nodes, groups, settings, {
         baseConf: options.baseConf ?? "",
         nodeList: settings.nodeList,
         overwriteOriginalRules: settings.overwriteOriginalRules,
-        rulesets: options.rulesets,
+        rulesets,
       });
     case TargetFormat.Mellow:
-      return toMellow(nodes, options.groups ?? [], settings, {
+      return toMellow(nodes, groups, settings, {
         baseConf: options.baseConf ?? "",
         nodeList: settings.nodeList,
         overwriteOriginalRules: settings.overwriteOriginalRules,
-        rulesets: options.rulesets,
+        rulesets,
       });
     case TargetFormat.V2Ray:
       return proxyToSingle(nodes, 4, settings);
@@ -129,11 +146,51 @@ export function toSip008(nodes: Proxy[], baseConf = ""): string {
   return proxyToSsSub(nodes, baseConf);
 }
 
+/** Resolve effective proxy groups, injecting bundled defaults when opted in. */
+function resolveGroups(options: GenerateOptions): ProxyGroupConfig[] {
+  if (options.includeRules === true && (!options.groups || options.groups.length === 0)) {
+    return getDefaultProxyGroups();
+  }
+  return options.groups ?? [];
+}
+
+/**
+ * Resolve effective rulesets.
+ *
+ * - `includeRules: false` always strips rules.
+ * - `includeRules: true` falls back to bundled offline defaults when no
+ *   explicit rulesets are given (mirrors upstream `config=ACL4SSR.ini`).
+ * - `includeRules: undefined` keeps the legacy behavior (explicit only).
+ * `enableRuleGenerator: false` or `nodeList: true` always strips rules,
+ * mirroring upstream `enable_rule_generator` / bare-list semantics.
+ */
+function resolveRulesets(
+  options: GenerateOptions,
+  settings: ExtraSettings,
+): RulesetContent[] | undefined {
+  if (options.includeRules === false) {
+    return undefined;
+  }
+  if (!settings.enableRuleGenerator || settings.nodeList) {
+    return undefined;
+  }
+  if (options.includeRules === true) {
+    if (options.rulesets && options.rulesets.length > 0) {
+      return options.rulesets;
+    }
+    return getDefaultRulesets();
+  }
+  return options.rulesets;
+}
+
 function attachClashRules(
   doc: Record<string, unknown>,
   settings: ExtraSettings,
   rulesets: RulesetContent[] | undefined,
 ): void {
+  if (!settings.enableRuleGenerator || settings.nodeList) {
+    return;
+  }
   if (!rulesets || rulesets.length === 0) {
     return;
   }

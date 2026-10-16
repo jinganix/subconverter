@@ -1,0 +1,6 @@
+SS-plain = Shadowsocks,1.1.1.1,8388,aes-256-gcm,"pw"
+Socks-test = socks5,10.10.10.1,1080,u,"p",over-tls=false
+VMESS-ws = vmess,3.3.3.1,443,chacha20-ietf-poly1305,"b831381d-6324-4d53-ad4f-8cda48b30811",over-tls=true,tls-name=h.example.com,transport=ws,path=/p,host=h.example.com,skip-cert-verify=true
+HTTP-test = http,10.10.10.2,8080,u,"p"
+TJ-test = trojan,6.6.6.6,443,"pw",tls-name=h.example.com,transport=tcp
+WG-test = wireguard, interface-ip=10.0.0.2, private-key=privkey123, dns=1.1.1.1, dns=8.8.8.8, mtu=1420, peers=[{public-key = pubkey123, endpoint = 9.9.9.1:2408, allowed-ips = "0.0.0.0/0"}]

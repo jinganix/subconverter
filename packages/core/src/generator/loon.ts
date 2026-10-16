@@ -192,6 +192,8 @@ function buildLoonGroups(extraProxyGroup: ProxyGroupConfig[], nodelist: Proxy[])
 export interface LoonOptions {
   baseConf: string;
   nodeList: boolean;
+  /** Rule lines to inject, plus the section name to place them in. */
+  rules?: { section: string; lines: string[] };
 }
 
 /** Convert nodes into a Loon configuration string. */
@@ -229,6 +231,9 @@ export function toLoon(
   const groupLines = buildLoonGroups(extraProxyGroup, nodelist);
   if (groupLines.length > 0) {
     setRawSection(sections, "Proxy Group", groupLines);
+  }
+  if (options.rules && options.rules.lines.length > 0) {
+    setRawSection(sections, options.rules.section, options.rules.lines);
   }
   return renderRawIni(sections);
 }

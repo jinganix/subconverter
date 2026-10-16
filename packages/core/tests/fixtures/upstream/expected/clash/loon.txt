@@ -1,0 +1,11 @@
+SS-plain = Shadowsocks,1.1.1.1,8388,aes-256-gcm,"pw"
+SS-obfs = Shadowsocks,1.1.1.2,8388,aes-256-gcm,"pw",http,bing.com
+SSR-test = ShadowsocksR,2.2.2.1,8388,aes-256-cfb,"pw",protocol=auth_sha1_v4,protocol-param=pp,obfs=http_simple,obfs-param=op
+VMESS-ws = vmess,3.3.3.1,443,chacha20-ietf-poly1305,"b831381d-6324-4d53-ad4f-8cda48b30811",over-tls=true,tls-name=h.example.com,transport=ws,path=/p,host=h.example.com
+VLESS-ws = VLESS,5.5.5.5,443,"b831381d-6324-4d53-ad4f-8cda48b30811",path=/p,host=h.example.com,transport=ws,udp=false,over-tls=true,sni=h.example.com
+TJ-test = trojan,6.6.6.6,443,"pw",tls-name=h.example.com,transport=tcp
+TJ-ws = trojan,6.6.6.7,443,"pw",tls-name=h.example.com,transport=ws,path=/ws,host=h.example.com
+SOCKS-tg = socks5,10.10.10.1,1080,u,"p",over-tls=false
+HTTP-tg = http,10.10.10.2,8080,u,"p"
+WG-test = wireguard, interface-ip=10.0.0.2, private-key=privkey123, dns=1.1.1.1, mtu=1420, peers=[{public-key = pubkey123, endpoint = 9.9.9.1:2408, allowed-ips = "0.0.0.0/0, ::/0"}]
+HY2-test = Hysteria2,7.7.7.7,443,"pw",sni=h.example.com,download-bandwidth=50,fast-open=false,udp=true

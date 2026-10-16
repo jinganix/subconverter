@@ -129,6 +129,11 @@ export {
 } from "./parser/uri";
 
 export { buildClash, stringifyClash, toClash } from "./generator/clash";
+export {
+  getDefaultProxyGroups,
+  getDefaultRulesetConfigs,
+  getDefaultRulesets,
+} from "./generator/default-profile";
 export { generate, runPreprocess, toSip008, type GenerateOptions } from "./engine";
 export {
   CLASH_RULE_TYPES,

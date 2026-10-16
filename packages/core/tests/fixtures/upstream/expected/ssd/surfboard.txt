@@ -1,0 +1,4 @@
+#!MANAGED-CONFIG http://127.0.0.1:25500/sub?append_type=false&emoji=false&expand=false&list=true&new_name=true&sort=false&target=surfboard&url=data%3Atext%2Fplain%3Bbase64%2Cc3NkOi8vZXlKaGFYSndiM0owSWpvaVJtbDRkSFZ5WlVGcGNuQnZjblFpTENKelpYSjJaWEp6SWpwYmV5SnpaWEoyWlhJaU9pSXhMakl1TXk0MElpd2ljRzl5ZENJNk9ETTRPQ3dpWlc1amNubHdkR2x2YmlJNkltRmxjeTB5TlRZdFoyTnRJaXdpY0dGemMzZHZjbVFpT2lKd2R5SXNJbkpsYldGeWEzTWlPaUpUVTBRdGIyNWxJbjBzZXlKelpYSjJaWElpT2lJeExqSXVNeTQxSWl3aWNHOXlkQ0k2T0RNNE9Td2laVzVqY25sd2RHbHZiaUk2SW1GbGN5MHhNamd0WjJOdElpd2ljR0Z6YzNkdmNtUWlPaUp3ZHpJaUxDSnlaVzFoY210eklqb2lVMU5FTFhSM2J5SXNJbkJzZFdkcGJpSTZJbTlpWm5NdGJHOWpZV3dpTENKd2JIVm5hVzVmYjNCMGFXOXVjeUk2SW05aVpuTTlhSFIwY0NKOVhYMD0%3D interval=86400 strict=false
+
+SSD-one = ss, 1.2.3.4, 8388, encrypt-method=aes-256-gcm, password=pw
+SSD-two = ss, 1.2.3.5, 8389, encrypt-method=aes-128-gcm, password=pw2,obfs=http

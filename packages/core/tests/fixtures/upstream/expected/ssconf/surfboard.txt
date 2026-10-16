@@ -1,0 +1,4 @@
+#!MANAGED-CONFIG http://127.0.0.1:25500/sub?append_type=false&emoji=false&expand=false&list=true&new_name=true&sort=false&target=surfboard&url=data%3Atext%2Fplain%3Bbase64%2CewogICJ2ZXJzaW9uIjogMSwKICAicmVtYXJrcyI6ICJTU0dyb3VwIiwKICAic2VydmVycyI6IFsKICAgIHsKICAgICAgInNlcnZlciI6ICIxLjIuMy40IiwKICAgICAgInNlcnZlcl9wb3J0IjogODM4OCwKICAgICAgInBhc3N3b3JkIjogInB3IiwKICAgICAgIm1ldGhvZCI6ICJhZXMtMjU2LWdjbSIsCiAgICAgICJyZW1hcmtzIjogIlNTQ09ORi1vbmUiCiAgICB9LAogICAgewogICAgICAic2VydmVyIjogIjEuMi4zLjUiLAogICAgICAic2VydmVyX3BvcnQiOiA4Mzg5LAogICAgICAicGFzc3dvcmQiOiAicHcyIiwKICAgICAgIm1ldGhvZCI6ICJhZXMtMTI4LWdjbSIsCiAgICAgICJyZW1hcmtzIjogIlNTQ09ORi10d28iCiAgICB9CiAgXQp9 interval=86400 strict=false
+
+SSCONF-one = ss, 1.2.3.4, 8388, encrypt-method=aes-256-gcm, password=pw
+SSCONF-two = ss, 1.2.3.5, 8389, encrypt-method=aes-128-gcm, password=pw2

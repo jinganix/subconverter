@@ -129,4 +129,40 @@ describe("ruleset loading", () => {
     });
     expect(input.rulesets).toHaveLength(1);
   });
+
+  it("keeps inline [] rules without fetching", async () => {
+    const { loadRuleset } = await import("../src/index");
+    const loaded = await loadRuleset({ group: "G", interval: 0, url: "[]GEOIP,CN" });
+    expect(loaded.content).toBe("[]GEOIP,CN");
+  });
+
+  it("injects bundled defaults when includeRules is set", async () => {
+    const { prepareConversion } = await import("../src/index");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 500, statusText: "err" })),
+    );
+    const input = await prepareConversion({
+      includeRules: true,
+      sources: [{ kind: "text", text: "trojan://pw@1.2.3.4:443#A" }],
+      target: "clash" as never,
+    });
+    expect(input.extraProxyGroup.length).toBeGreaterThan(5);
+    expect(input.rulesets.length).toBeGreaterThan(5);
+    vi.unstubAllGlobals();
+  });
+
+  it("strips rules when includeRules is false", async () => {
+    const { prepareConversion } = await import("../src/index");
+    const path = join(dir, "rules.list");
+    await writeFile(path, "DOMAIN,example.com", "utf-8");
+    const input = await prepareConversion({
+      includeRules: false,
+      rulesets: [{ group: "G", interval: 0, url: path }],
+      sources: [{ kind: "text", text: "trojan://pw@1.2.3.4:443#A" }],
+      target: "clash" as never,
+    });
+    expect(input.rulesets).toHaveLength(0);
+    expect(input.extraProxyGroup).toHaveLength(0);
+  });
 });
