@@ -1,0 +1,279 @@
+name: RELEASE
+
+# Manual release, adapted from webpb's release.yml for a pure-TS npm monorepo.
+# Differences from webpb: no Maven/gradle, no -SNAPSHOT cycle (npm has none).
+# Version source of truth is the root package.json; scripts/sync-versions.mjs
+# fans it out to packages/* and package-lock.json.
+#
+# Required secrets:
+#   ACTION_TOKEN - PAT (repo + workflow) for checkout / PR / auto-merge / tag.
+# npm auth uses Trusted Publishing (OIDC): no NPM_TOKEN needed. Configure each of
+# the 4 packages on npmjs.com (Settings > Trusted Publisher) with org `subconverter`,
+# repo `jinganix/subconverter`, workflow file `release.yml`. First publish of a new
+# package needs a one-off token publish before the trust binding can be created
+# (see README Release section).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (x.y.z). Empty = auto bump from current."
+        required: false
+      bump:
+        description: "Auto-bump part when version is empty"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+      publish_only:
+        description: "Republish only (tag must already exist)"
+        type: boolean
+        default: false
+      targets:
+        description: "Publish targets; use with publish_only to retry one target"
+        type: choice
+        options:
+          - all
+          - core
+          - node
+          - browser
+          - cli
+        default: all
+
+jobs:
+  prepare:
+    name: Prepare release version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.ACTION_TOKEN }}
+          fetch-depth: 0
+          ref: main
+
+      - name: Determine release version
+        id: release-version
+        run: |
+          set -euo pipefail
+          current_version=$(node -p "require('./package.json').version")
+          input_version="${{ github.event.inputs.version }}"
+          publish_only="${{ github.event.inputs.publish_only }}"
+          bump="${{ github.event.inputs.bump }}"
+          echo "Current: ${current_version}, input: ${input_version}, bump: ${bump}, publish_only: ${publish_only}"
+          if [[ "${publish_only}" == "true" ]]; then
+            if ! [[ "${input_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "ERROR: publish_only requires version x.y.z"
+              exit 1
+            fi
+            release_version="${input_version}"
+          elif [[ -n "${input_version}" ]]; then
+            if ! [[ "${input_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "ERROR: invalid version ${input_version}, want x.y.z"
+              exit 1
+            fi
+            # reject input older than current
+            older=$(node -e "const [a,b]=['${input_version}','${current_version}'].map((v) => v.split('.').map(Number)); console.log(a[0]<b[0]||(a[0]===b[0]&&(a[1]<b[1]||(a[1]===b[1]&&a[2]<b[2]))))")
+            if [[ "${older}" == "true" ]]; then
+              echo "ERROR: input ${input_version} is older than current ${current_version}"
+              exit 1
+            fi
+            release_version="${input_version}"
+          else
+            release_version=$(node -e "
+              const [M, m, p] = '${current_version}'.split('.').map(Number);
+              const bump = '${bump}';
+              console.log(bump === 'major' ? \`\${M + 1}.0.0\` : bump === 'minor' ? \`\${M}.\${m + 1}.0\` : \`\${M}.\${m}.\${p + 1}\`);
+            ")
+          fi
+          echo "release_version=${release_version}" >> "${GITHUB_ENV}"
+          echo "Release version: ${release_version}"
+
+      - name: Check tag existence
+        run: |
+          if [[ "${{ github.event.inputs.publish_only }}" == "true" ]]; then
+            if ! git rev-parse "v${{ env.release_version }}" >/dev/null 2>&1; then
+              echo "ERROR: tag v${{ env.release_version }} does not exist"
+              exit 1
+            fi
+          elif git rev-parse "v${{ env.release_version }}" >/dev/null 2>&1; then
+            echo "ERROR: tag v${{ env.release_version }} already exists"
+            exit 1
+          fi
+
+      - name: Write version to file
+        run: echo "${{ env.release_version }}" > /tmp/release_version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.sha }}
+          path: /tmp/release_version
+          retention-days: 30
+
+  update-release:
+    name: Update release version
+    needs: [prepare]
+    if: github.event.inputs.publish_only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ github.sha }}
+          path: /tmp
+
+      - name: Read release version
+        run: |
+          release_version=$(cat /tmp/release_version)
+          echo "release_version=${release_version}" >> "${GITHUB_ENV}"
+
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.ACTION_TOKEN }}
+          fetch-depth: 0
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Sync versions
+        run: |
+          node scripts/sync-versions.mjs --release "${{ env.release_version }}"
+          git config user.email "github-actions@github.com"
+          git config user.name "github-actions"
+          git add package.json package-lock.json packages/core/package.json packages/node/package.json packages/browser/package.json packages/cli/package.json
+          git diff --cached --quiet || git commit -m "chore: release ${{ env.release_version }}" --quiet
+
+      - name: Create pull request
+        id: cpr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.ACTION_TOKEN }}
+          commit-message: "chore: release ${{ env.release_version }}"
+          title: "chore: release ${{ env.release_version }}"
+          base: "main"
+          branch: "release-${{ env.release_version }}"
+
+      - name: Auto merge pull request
+        continue-on-error: true
+        if: steps.cpr.outputs.pull-request-operation == 'created'
+        run: gh pr merge "${{ steps.cpr.outputs.pull-request-number }}" --squash --admin
+        env:
+          GH_TOKEN: ${{ secrets.ACTION_TOKEN }}
+
+  release:
+    name: Release
+    needs: [update-release]
+    if: github.event.inputs.publish_only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ github.sha }}
+          path: /tmp
+
+      - name: Read release version
+        run: |
+          release_version=$(cat /tmp/release_version)
+          echo "release_version=${release_version}" >> "${GITHUB_ENV}"
+
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.ACTION_TOKEN }}
+          fetch-depth: 0
+          ref: main
+
+      - name: Find release commit
+        run: |
+          release_commit=$(git log --grep="chore: release ${{ env.release_version }}" -n 10 --pretty=format:%H | head -n 1)
+          if [ -z "${release_commit}" ]; then
+            echo "Error: release commit not found"
+            exit 1
+          fi
+          echo "release_commit=${release_commit}" >> "${GITHUB_ENV}"
+
+      - name: Create release tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.ACTION_TOKEN }}
+          custom_tag: ${{ env.release_version }}
+          tag_prefix: v
+          commit_sha: ${{ env.release_commit }}
+
+      - name: Create github release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.tag_version.outputs.new_tag }}
+          name: Release ${{ steps.tag_version.outputs.new_tag }}
+          body: ${{ steps.tag_version.outputs.changelog }}
+
+  publish-npm:
+    name: Publish npm
+    needs: [prepare, release]
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.prepare.result == 'success' &&
+      (github.event.inputs.publish_only == 'true' || needs.release.result == 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download release_version
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ github.sha }}
+          path: /tmp
+
+      - name: Read release version
+        run: |
+          release_version=$(cat /tmp/release_version)
+          echo "release_version=${release_version}" >> "${GITHUB_ENV}"
+
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.ACTION_TOKEN }}
+          fetch-depth: 0
+          ref: refs/tags/v${{ env.release_version }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+
+      - name: Install and build
+        run: |
+          npm install -g npm@latest
+          npm ci
+          npm run build
+
+      - name: Publish to npm (dependency order)
+        run: |
+          set -euo pipefail
+          npm --version
+          targets="${{ github.event.inputs.targets }}"
+          should_publish() {
+            [[ "${targets}" == "all" || "${targets}" == "$1" ]]
+          }
+          publish_one() {
+            echo "--- publishing $1 ---"
+            (cd "$1" && npm publish --access public)
+          }
+          should_publish core && publish_one packages/core
+          should_publish node && publish_one packages/node
+          should_publish browser && publish_one packages/browser
+          should_publish cli && publish_one packages/cli

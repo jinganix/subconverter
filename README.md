@@ -1,5 +1,15 @@
 # subconverter-ts
 
+[![CI](https://github.com/jinganix/subconverter/actions/workflows/ci.yml/badge.svg)](https://github.com/jinganix/subconverter/actions/workflows/ci.yml)
+[![core coverage](https://codecov.io/gh/jinganix/subconverter/branch/main/graph/badge.svg?flag=core)](https://codecov.io/gh/jinganix/subconverter/flags/core)
+[![node coverage](https://codecov.io/gh/jinganix/subconverter/branch/main/graph/badge.svg?flag=node)](https://codecov.io/gh/jinganix/subconverter/flags/node)
+[![browser coverage](https://codecov.io/gh/jinganix/subconverter/branch/main/graph/badge.svg?flag=browser)](https://codecov.io/gh/jinganix/subconverter/flags/browser)
+[![cli coverage](https://codecov.io/gh/jinganix/subconverter/branch/main/graph/badge.svg?flag=cli)](https://codecov.io/gh/jinganix/subconverter/flags/cli)
+[![npm core](https://img.shields.io/npm/v/@subconverter/core)](https://www.npmjs.com/package/@subconverter/core)
+[![npm node](https://img.shields.io/npm/v/@subconverter/node)](https://www.npmjs.com/package/@subconverter/node)
+[![npm browser](https://img.shields.io/npm/v/@subconverter/browser)](https://www.npmjs.com/package/@subconverter/browser)
+[![npm cli](https://img.shields.io/npm/v/@subconverter/cli)](https://www.npmjs.com/package/@subconverter/cli)
+
 English | [简体中文](README.zh-CN.md)
 
 A TypeScript rewrite of [tindy2013/subconverter](https://github.com/tindy2013/subconverter):
@@ -23,6 +33,15 @@ This is an npm-workspaces monorepo with a strict dependency direction
 
 The engine never imports Node built-ins or DOM globals, so the same code powers all three
 targets.
+
+## Install
+
+```bash
+npm i @subconverter/core     # engine only
+npm i @subconverter/node     # + Node loader (fetch/fs)
+npm i @subconverter/browser  # browser ESM / IIFE global `SubConverter`
+npm i -g @subconverter/cli  # CLI: `subconverter`
+```
 
 ## Capabilities
 
@@ -95,6 +114,30 @@ import { generate, parseSubscription, TargetFormat } from "@subconverter/core";
 const nodes = parseSubscription(await response.text());
 const clash = generate(nodes, { target: TargetFormat.Clash });
 ```
+
+## Release
+
+All four packages move in lockstep. The root `package.json` version is the source of
+truth; `scripts/sync-versions.mjs` fans it out to `packages/*` and `package-lock.json`.
+
+1. Add repo secret `ACTION_TOKEN` (PAT with `repo` + `workflow`). npm auth needs no
+   token: this repo uses [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/)
+   (OIDC). On npmjs.com, open each package (`@subconverter/core`, `node`, `browser`,
+   `cli`) → Settings → Trusted Publisher → GitHub Actions with org `subconverter`,
+   repo `jinganix/subconverter`, workflow file `release.yml`. The `publish-npm` job
+   already requests `id-token: write` and upgrades to the latest npm CLI.
+2. Actions → `RELEASE` → Run workflow. Leave `version` empty to auto-bump (use `bump`
+   to pick `patch`/`minor`/`major`); fill `version` with `x.y.z` to pin a release.
+3. The workflow opens `chore: release x.y.z`, auto-merges it, tags `vx.y.z`, creates the
+   GitHub release, then publishes in dependency order: `core` → `node`/`browser` → `cli`.
+4. Retry a failed target with `publish_only: true` + `targets: <core|node|browser|cli>`
+   and the existing `version`.
+
+Bootstrap note: a trust binding can only be created for a package that already exists on
+npm, so the very first publish of each package must be done once with a one-off
+automation token (`npm publish --access public` from a clean checkout of the release
+tag), then bind the trusted publisher and delete the token. Every release after that is
+tokenless with automatic provenance.
 
 ## License
 

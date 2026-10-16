@@ -1,0 +1,68 @@
+codecov:
+  require_ci_to_pass: true
+
+coverage:
+  status:
+    default_rules:
+      flag_coverage_not_uploaded_behavior: exclude
+    project:
+      default: false
+      core:
+        informational: true
+        flags:
+          - core
+      node:
+        informational: true
+        flags:
+          - node
+      browser:
+        informational: true
+        flags:
+          - browser
+      cli:
+        informational: true
+        flags:
+          - cli
+    patch:
+      default: false
+      core:
+        informational: true
+        flags:
+          - core
+      node:
+        informational: true
+        flags:
+          - node
+      browser:
+        informational: true
+        flags:
+          - browser
+      cli:
+        informational: true
+        flags:
+          - cli
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: false
+  show_carryforward_flags: true
+
+flag_management:
+  individual_flags:
+    - name: core
+      paths:
+        - packages/core/
+      carryforward: true
+    - name: node
+      paths:
+        - packages/node/
+      carryforward: true
+    - name: browser
+      paths:
+        - packages/browser/
+      carryforward: true
+    - name: cli
+      paths:
+        - packages/cli/
+      carryforward: true
