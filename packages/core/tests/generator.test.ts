@@ -240,8 +240,15 @@ describe("toClash", () => {
 
   it("uses the legacy Proxy key when requested", () => {
     const settings = createExtraSettings();
+    settings.clashNewFieldName = false;
     const yaml = toClash([ssNode("Node")], [], settings);
     expect(yaml).toContain("Proxy:");
+  });
+
+  it("defaults to the new proxies key", () => {
+    const settings = createExtraSettings();
+    const yaml = toClash([ssNode("Node")], [], settings);
+    expect(yaml).toContain("proxies:");
   });
 
   it("appends the proxy type when requested", () => {

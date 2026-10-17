@@ -28,12 +28,11 @@ export interface GenerateOptions {
    * Whether to attach rules (and default proxy groups) like upstream
    * `tindy2013/subconverter` does with e.g. `config=ACL4SSR.ini`.
    *
-   * - `true`: emit rules; when `rulesets` is empty, fall back to the bundled
-   *   offline defaults. When `groups` is empty, fall back to the bundled
-   *   default proxy groups so rule references resolve.
+   * - `true`/`undefined` (default): emit rules; when `rulesets` is empty,
+   *   fall back to the bundled offline defaults. When `groups` is empty,
+   *   fall back to the bundled default proxy groups so rule references
+   *   resolve. Pass `no_rules`/`--no-rules` (`false`) to strip rules.
    * - `false`: never emit rules, even if `rulesets` are provided.
-   * - `undefined` (default): legacy behavior — emit `rulesets` only when
-   *   explicitly provided, preserving backward compatibility.
    */
   includeRules?: boolean;
 }
@@ -74,7 +73,7 @@ export function generate(nodes: Proxy[], options: GenerateOptions): string {
       return stringifyClash(doc);
     }
     case TargetFormat.Surge: {
-      const surgeVersion = options.surgeVersion ?? 4;
+      const surgeVersion = options.surgeVersion ?? 5;
       const rules = rulesets ? rulesetToSurgeRules(rulesets, surgeVersion) : undefined;
       return toSurge(nodes, groups, settings, {
         baseConf: options.baseConf ?? "",
@@ -136,7 +135,7 @@ export function generate(nodes: Proxy[], options: GenerateOptions): string {
     case TargetFormat.SSSub:
       return proxyToSsSub(nodes, options.baseConf ?? "");
     case TargetFormat.Surfboard: {
-      const rules = rulesets ? rulesetToSurgeRules(rulesets, options.surgeVersion ?? 4) : undefined;
+      const rules = rulesets ? rulesetToSurgeRules(rulesets, options.surgeVersion ?? 5) : undefined;
       return toSurfboard(nodes, groups, settings, {
         baseConf: options.baseConf ?? "",
         nodeList: settings.nodeList,
@@ -157,9 +156,9 @@ export function toSip008(nodes: Proxy[], baseConf = ""): string {
   return proxyToSsSub(nodes, baseConf);
 }
 
-/** Resolve effective proxy groups, injecting bundled defaults when opted in. */
+/** Resolve effective proxy groups, injecting bundled defaults unless opted out. */
 function resolveGroups(options: GenerateOptions): ProxyGroupConfig[] {
-  if (options.includeRules === true && (!options.groups || options.groups.length === 0)) {
+  if (options.includeRules !== false && (!options.groups || options.groups.length === 0)) {
     return getDefaultProxyGroups();
   }
   return options.groups ?? [];
@@ -168,10 +167,10 @@ function resolveGroups(options: GenerateOptions): ProxyGroupConfig[] {
 /**
  * Resolve effective rulesets.
  *
- * - `includeRules: false` always strips rules.
- * - `includeRules: true` falls back to bundled offline defaults when no
- *   explicit rulesets are given (mirrors upstream `config=ACL4SSR.ini`).
- * - `includeRules: undefined` keeps the legacy behavior (explicit only).
+ * - `includeRules: false` always strips rules (`no_rules` / `--no-rules`).
+ * - `includeRules: true`/`undefined` (default) falls back to bundled offline
+ *   defaults when no explicit rulesets are given (mirrors upstream
+ *   `config=ACL4SSR.ini`).
  * `enableRuleGenerator: false` or `nodeList: true` always strips rules,
  * mirroring upstream `enable_rule_generator` / bare-list semantics.
  */
@@ -185,13 +184,10 @@ function resolveRulesets(
   if (!settings.enableRuleGenerator || settings.nodeList) {
     return undefined;
   }
-  if (options.includeRules === true) {
-    if (options.rulesets && options.rulesets.length > 0) {
-      return options.rulesets;
-    }
-    return getDefaultRulesets();
+  if (options.rulesets && options.rulesets.length > 0) {
+    return options.rulesets;
   }
-  return options.rulesets;
+  return getDefaultRulesets();
 }
 
 function attachClashRules(

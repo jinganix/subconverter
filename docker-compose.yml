@@ -1,0 +1,11 @@
+services:
+  subconverter:
+    build: .
+    image: subconverter-ts:latest
+    container_name: subconverter-ts
+    ports:
+      - "25500:25500"
+    environment:
+      PORT: "25500"
+      HOST: "0.0.0.0"
+    restart: unless-stopped

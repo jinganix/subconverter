@@ -180,7 +180,11 @@ describe("frozen fixtures: clash family round-trips every node", () => {
       const settings = createExtraSettings();
       settings.clashNewFieldName = true;
       for (const target of [TargetFormat.Clash, TargetFormat.ClashR]) {
-        const out = generate(structuredClone(nodes), { settings: { ...settings }, target });
+        const out = generate(structuredClone(nodes), {
+          includeRules: false,
+          settings: { ...settings },
+          target,
+        });
         const expected =
           input === "surge" ? readExpected(input, "clash") : readExpected(input, "clash");
         void expected;
@@ -213,6 +217,7 @@ describe("frozen fixtures: surge/quanx/loon/singbox keep supported nodes", () =>
       const nodes = parseSubscription(readInput(INPUT_FILES[input] as string));
       const settings = createExtraSettings();
       const out = generate(structuredClone(nodes), {
+        includeRules: false,
         settings,
         target: TargetFormat.QuantumultX,
       });
@@ -224,7 +229,11 @@ describe("frozen fixtures: surge/quanx/loon/singbox keep supported nodes", () =>
     it(`${input} -> loon matches the frozen node set`, () => {
       const nodes = parseSubscription(readInput(INPUT_FILES[input] as string));
       const settings = createExtraSettings();
-      const out = generate(structuredClone(nodes), { settings, target: TargetFormat.Loon });
+      const out = generate(structuredClone(nodes), {
+        includeRules: false,
+        settings,
+        target: TargetFormat.Loon,
+      });
       // Names match; Hysteria2 bandwidth lines differ by design (reference
       // uses the up value; ours emits the spec-correct down value).
       expect(sorted(loonNames(out))).toEqual(sorted(loonNames(readExpected(input, "loon"))));

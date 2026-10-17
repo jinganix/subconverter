@@ -161,6 +161,13 @@ describe("url utils", () => {
     expect(getUrlArg("flag", "flag")).toBe("");
   });
 
+  it("treats underscore and hyphen keys as equivalent", () => {
+    expect(getUrlArg("add-emoji=true", "add_emoji")).toBe("true");
+    expect(getUrlArg("add_emoji=true", "add-emoji")).toBe("true");
+    expect(getUrlArg("FILTER_DEPRECATED=1", "filter_deprecated")).toBe("1");
+    expect(getUrlArg("add%5Femoji=true", "add_emoji")).toBe("true");
+  });
+
   it("splits urls and strips schemes", () => {
     expect(splitUrl("https://x/y?a=1#h")).toEqual({ base: "https://x/y", query: "a=1" });
     expect(splitUrl("no-query")).toEqual({ base: "no-query", query: "" });

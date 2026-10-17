@@ -1,0 +1,11 @@
+node_modules/
+packages/*/dist/
+packages/*/coverage/
+coverage/
+.nx/
+.git/
+.github/
+docs/
+*.log
+npm-debug.log*
+.tmp/

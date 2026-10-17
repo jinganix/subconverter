@@ -51,6 +51,29 @@ export function createProxyGroupConfig(): ProxyGroupConfig {
   };
 }
 
+/**
+ * Create one select group that fans out to every proxy type, mirroring the
+ * CLI `--group` flag and the server `group` param. Shared so both
+ * entrypoints build byte-identical groups.
+ */
+export function createSelectGroup(name: string): ProxyGroupConfig {
+  return {
+    disableUdp: undefined,
+    evaluateBeforeUse: undefined,
+    interval: 0,
+    lazy: undefined,
+    name,
+    persistent: undefined,
+    proxies: ["[]DIRECT", "!!TYPE=SS", "!!TYPE=SSR", "!!TYPE=VMESS", "!!TYPE=TROJAN"],
+    strategy: BalanceStrategy.ConsistentHashing,
+    timeout: 0,
+    tolerance: 0,
+    type: ProxyGroupType.Select,
+    url: "",
+    usingProvider: [],
+  };
+}
+
 /** Resolve a textual group type (as found in config files). */
 export function parseProxyGroupType(value: string): ProxyGroupType | undefined {
   const normalized = value.trim().toLowerCase();

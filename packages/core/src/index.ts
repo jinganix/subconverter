@@ -2,6 +2,7 @@ export {
   BalanceStrategy,
   ProxyGroupType,
   createProxyGroupConfig,
+  createSelectGroup,
   parseProxyGroupType,
   type ProxyGroupConfig,
 } from "./types/proxy-group";
@@ -59,7 +60,15 @@ export {
   trim,
   trimLowerCase,
 } from "./utils/string";
-export { getUrlArg, splitUrl, stripScheme, urlDecode, urlEncode } from "./utils/url";
+export {
+  getAllUrlArgs,
+  getUrlArg,
+  normalizeQueryKey,
+  splitUrl,
+  stripScheme,
+  urlDecode,
+  urlEncode,
+} from "./utils/url";
 export { fnv1a64, fnv1a64Hex } from "./utils/hash";
 export {
   hasTemplatePlaceholders,
@@ -75,7 +84,23 @@ export {
   parseRulesetConfig,
   type ExternalConfig,
 } from "./settings/config";
-export { createRequestSettings, parseRequestSettings } from "./settings/request-params";
+export {
+  createRequestSettings,
+  parseRequestSettings,
+  queryBoolFlag,
+  resolveNewFieldName,
+} from "./settings/request-params";
+export {
+  convertUserinfo,
+  formatSubscriptionUserinfo,
+  inferUserinfoProviderFromUrl,
+  nextMonthlyResetTimestamp,
+  normalizeUserinfoProvider,
+  parseJmsUserinfo,
+  parseSubscriptionUserinfo,
+  type UserinfoData,
+  type UserinfoProvider,
+} from "./userinfo";
 
 export { SS_CIPHERS, SSR_CIPHERS, isFlattenableSsr, isSsCipher } from "./parser/ciphers";
 export {

@@ -3,18 +3,23 @@ import {
   type ProxyGroupConfig,
   type RulesetConfig,
   type RulesetContent,
-  BalanceStrategy,
-  ProxyGroupType,
   ProxyType,
   TargetFormat,
+  createSelectGroup,
   generate,
   parseExternalConfig,
   parseLink,
   parseRulesetConfig,
   parseSubscription,
   proxyTypeName,
+  resolveNewFieldName,
 } from "@subconverter/core";
-import { collectRulesets, fetchSubscription, writeOutputFile } from "@subconverter/node";
+import {
+  collectRulesets,
+  fetchSubscription,
+  startServer,
+  writeOutputFile,
+} from "@subconverter/node";
 import { readFile } from "node:fs/promises";
 
 const TARGET_VALUES = new Set(Object.values(TargetFormat));
@@ -32,8 +37,11 @@ function parseEmojiRules(values: string[]): ExtraSettings["emojiArray"] {
 
 function parseRenameRules(values: string[]): ExtraSettings["renameArray"] {
   return values.map((value) => {
-    const [match = "", replace = ""] = value.split("@");
-    return { match, replace, script: "" };
+    const at = value.lastIndexOf("@");
+    if (at === -1) {
+      return { match: value, replace: "", script: "" };
+    }
+    return { match: value.slice(0, at), replace: value.slice(at + 1), script: "" };
   });
 }
 
@@ -50,6 +58,9 @@ const BOOLEAN_FLAGS = new Set([
   "sort",
   "filter-deprecated",
   "new-field-name",
+  "new-name",
+  "legacy",
+  "legacy-field-name",
   "classical-ruleset",
   "dedupe",
   "with-rules",
@@ -57,6 +68,20 @@ const BOOLEAN_FLAGS = new Set([
   "version",
   "help",
 ]);
+
+function isBoolLiteral(value: string | undefined): boolean {
+  if (value === undefined) {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "true" ||
+    normalized === "false" ||
+    normalized === "1" ||
+    normalized === "0" ||
+    normalized === ""
+  );
+}
 
 function parseArgs(argv: string[]): ArgState {
   const flags = new Map<string, string[]>();
@@ -69,7 +94,14 @@ function parseArgs(argv: string[]): ArgState {
       if (eq !== -1) {
         pushFlag(flags, name, arg.slice(eq + 1));
       } else if (BOOLEAN_FLAGS.has(name) && name !== "version") {
-        pushFlag(flags, name, "true");
+        // Accept both `--flag` (true) and `--flag false` / `--flag 0`.
+        const next = argv[i + 1];
+        if (next !== undefined && isBoolLiteral(next) && !next.startsWith("--")) {
+          pushFlag(flags, name, next);
+          i += 1;
+        } else {
+          pushFlag(flags, name, "true");
+        }
       } else {
         const next = argv[i + 1];
         if (next === undefined || next.startsWith("--")) {
@@ -85,8 +117,10 @@ function parseArgs(argv: string[]): ArgState {
         e: "emoji",
         f: "file",
         g: "group",
+        H: "host",
         h: "help",
         o: "out",
+        p: "port",
         r: "rename",
         t: "target",
         u: "url",
@@ -120,21 +154,58 @@ function pushFlag(flags: Map<string, string[]>, name: string, value: string): vo
 }
 
 function flag(state: ArgState, name: string): string | undefined {
-  return state.flags.get(name)?.[0];
+  // Last occurrence wins, mirroring core `getUrlArg`.
+  const values = state.flags.get(name);
+  return values?.[values.length - 1];
 }
 
 function flagBool(state: ArgState, name: string): boolean {
-  return state.flags.get(name)?.[0] === "true";
+  // Any `true`/`1`/bare occurrence wins, mirroring server `queryBoolFlag`
+  // OR semantics (e.g. `--with-rules=false --with-rules` is on).
+  const values = state.flags.get(name);
+  if (!values) {
+    return false;
+  }
+  return values.some((raw) => {
+    const normalized = raw.trim().toLowerCase();
+    // Mirror core `boolArg`: bare flags arrive as `"true"`, and `=1` counts.
+    return normalized === "true" || normalized === "1" || normalized === "";
+  });
 }
 
 function flagAll(state: ArgState, name: string): string[] {
   return state.flags.get(name) ?? [];
 }
 
+/**
+ * Resolve the Clash field-name style by delegating to core
+ * `resolveNewFieldName` so CLI and server share one source of truth.
+ * Defaults to the new `proxies` / `proxy-groups` keys; `--legacy` or
+ * `--new-field-name=false` opts back into the legacy keys.
+ */
+function resolveClashNewFieldName(state: ArgState): boolean {
+  const parts: string[] = [];
+  for (const [name, values] of state.flags) {
+    const normalized = name.toLowerCase().replace(/_/g, "-");
+    if (normalized === "legacy" || normalized === "legacy-field-name") {
+      for (const value of values) {
+        parts.push(`legacy=${encodeURIComponent(value)}`);
+      }
+    }
+    if (normalized === "new-field-name" || normalized === "new-name") {
+      for (const value of values) {
+        parts.push(`new_field_name=${encodeURIComponent(value)}`);
+      }
+    }
+  }
+  return resolveNewFieldName(parts.join("&"));
+}
+
 const USAGE = `subconverter-ts
 
 Usage:
   subconverter convert [options] [<url-or-file> ...]
+  subconverter serve [--port 25500] [--host 0.0.0.0]
   subconverter parse <proxy-link ...>
   subconverter formats
 
@@ -151,14 +222,21 @@ Convert options:
       --append-type     Prefix node names with their proxy type
       --node-list       Emit a bare node list (no groups/wrapper)
       --sort            Sort nodes by name
-      --new-field-name  Use Clash's new field names (proxies/proxy-groups)
+      --new-field-name  Use Clash's new field names (proxies/proxy-groups, default true; use --new-field-name=false for legacy Proxy keys)
+      --legacy          Use legacy Clash field names (Proxy/Proxy Group/Rule)
       --dedupe          Drop duplicate nodes (same type/server/port/name)
-      --surge-version <n> Surge version for the surge target (default 4)
-      --with-rules      Attach rules + default proxy groups (like upstream config=ACL4SSR.ini)
-      --no-rules        Never emit rules, even if --ruleset/--config is given
+      --surge-version <n> Surge version for the surge target (default 5)
+      --with-rules      Attach rules + default proxy groups (default: on, kept for compat)
+      --no-rules        Strip rules and default groups (default: off)
       --ruleset <g,u>   Ruleset: group,url[,interval] or group,[]RULE (repeatable)
       --config <p|url>  External INI config with [custom] ruleset/groups (like upstream config=)
       --base <path>     Base config file merged under generated proxies/groups/rules
+
+Serve options:
+  -p, --port <n>      HTTP port for serve (default 25500, env PORT)
+  -H, --host <addr>   Bind address for serve (default 0.0.0.0, env HOST)
+                      Example: /sub?target=clash&url=<sub-url>
+                               &userinfo_url=<quota-url>&userinfo_provider=jms
   -h, --help            Show this help
 `;
 
@@ -185,8 +263,44 @@ export async function runCli(argv: string[]): Promise<number> {
     return runConvert(state);
   }
 
+  if (command === "serve") {
+    return runServe(state);
+  }
+
   process.stderr.write(`Unknown command: ${command}\n${USAGE}`);
   return 1;
+}
+
+async function runServe(state: ArgState): Promise<number> {
+  const portRaw = flag(state, "port") ?? process.env["PORT"] ?? "25500";
+  const host = flag(state, "host") ?? process.env["HOST"] ?? "0.0.0.0";
+  // Strict digits-only parse: `parseInt` would accept `25500abc`, and port
+  // `0` would listen on an unpredictable ephemeral port behind Docker's
+  // fixed `25500:25500` mapping.
+  const port = /^\d+$/.test(portRaw.trim()) ? Number.parseInt(portRaw, 10) : Number.NaN;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    process.stderr.write(`Invalid port: ${portRaw}\n`);
+    return 1;
+  }
+  try {
+    const server = await startServer({ host, port });
+    const shutdown = (): void => {
+      server.close(() => {
+        process.exit(0);
+      });
+      setTimeout(() => {
+        process.exit(0);
+      }, 1000).unref();
+    };
+    process.once("SIGINT", shutdown);
+    process.once("SIGTERM", shutdown);
+    // Keep serving until the process is stopped; the open socket holds the
+    // event loop alive so this never resolves under normal operation.
+    return new Promise<never>(() => {});
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    return 1;
+  }
 }
 
 function runParse(state: ArgState): number {
@@ -243,26 +357,12 @@ async function runConvert(state: ArgState): Promise<number> {
     return 1;
   }
 
-  const groups: ProxyGroupConfig[] = flagAll(state, "group").map((name) => ({
-    disableUdp: undefined,
-    evaluateBeforeUse: undefined,
-    interval: 0,
-    lazy: undefined,
-    name,
-    persistent: undefined,
-    proxies: ["[]DIRECT", "!!TYPE=SS", "!!TYPE=SSR", "!!TYPE=VMESS", "!!TYPE=TROJAN"],
-    strategy: BalanceStrategy.ConsistentHashing,
-    timeout: 0,
-    tolerance: 0,
-    type: ProxyGroupType.Select,
-    url: "",
-    usingProvider: [],
-  }));
+  const groups: ProxyGroupConfig[] = flagAll(state, "group").map((name) => createSelectGroup(name));
 
   const settings: Partial<ExtraSettings> = {
     addEmoji: flagBool(state, "add-emoji"),
     appendProxyType: flagBool(state, "append-type"),
-    clashNewFieldName: flagBool(state, "new-field-name"),
+    clashNewFieldName: resolveClashNewFieldName(state),
     dedupe: flagBool(state, "dedupe"),
     emojiArray: parseEmojiRules(flagAll(state, "emoji")),
     filterDeprecated: flagBool(state, "filter-deprecated"),
@@ -319,16 +419,20 @@ async function runConvert(state: ArgState): Promise<number> {
       : await readFile(basePath, "utf-8");
   }
 
-  // `--with-rules` opts into bundled upstream-like defaults (offline);
-  // `--ruleset`/`--config` imply it unless `--no-rules` strips everything.
+  // Rules are on by default (bundled upstream-like defaults, offline);
+  // `--no-rules` strips everything and wins over `--with-rules` (compat).
+  // NOTE: default-on is a breaking change vs pre-serve releases; use
+  // `--no-rules` to restore the old bare output.
+  const wantRules = state.flags.has("with-rules") ? flagBool(state, "with-rules") : true;
   let includeRules: boolean | undefined;
   if (flagBool(state, "no-rules")) {
     includeRules = false;
-  } else if (flagBool(state, "with-rules")) {
-    includeRules = true;
-  } else if (rulesetConfigs.length > 0 || configSource) {
-    includeRules = true;
+  } else {
+    includeRules = wantRules;
   }
+
+  const surgeRaw = flag(state, "surge-version") ?? "5";
+  const surgeVersion = Number.parseInt(surgeRaw.trim(), 10) || 5;
 
   const output = generate(nodes, {
     baseConf,
@@ -336,7 +440,7 @@ async function runConvert(state: ArgState): Promise<number> {
     includeRules,
     rulesets,
     settings,
-    surgeVersion: Number(flag(state, "surge-version") ?? 4),
+    surgeVersion,
     target,
   });
 

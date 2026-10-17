@@ -67,7 +67,7 @@ export function createExtraSettings(): ExtraSettings {
     appendProxyType: false,
     authorized: false,
     clashClassicalRuleset: false,
-    clashNewFieldName: false,
+    clashNewFieldName: true,
     clashProxiesStyle: "flow",
     clashProxyGroupsStyle: "flow",
     clashScript: false,
@@ -105,6 +105,7 @@ export interface RequestSettings {
   removeEmoji: boolean;
   appendType: boolean;
   nodeList: boolean;
+  dedupe: boolean;
   sort: boolean;
   filterDeprecated: boolean;
   list: boolean;
@@ -123,4 +124,8 @@ export interface RequestSettings {
   proxyGroupsStyle: string;
   autoExtract: boolean;
   uploadPath: string;
+  /** Extra quota endpoint fetched server-side (`userinfo_url` / `userinfo-url`). */
+  userinfoUrl: string;
+  /** Converter for the quota endpoint (`jms` for Just-My-Socks, `subscription`, `auto`). */
+  userinfoProvider: string;
 }

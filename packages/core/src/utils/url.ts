@@ -17,13 +17,21 @@ export function urlEncode(input: string): string {
   );
 }
 
+/** Normalize a query key: case-insensitive with `_`/`-` equivalent. */
+export function normalizeQueryKey(key: string): string {
+  return key.toLowerCase().replace(/_/g, "-");
+}
+
 /**
- * Read a parameter from a query string, mirroring subconverter's
- * `getUrlArg` (last occurrence wins, value percent-decoded).
+ * Read every occurrence of a parameter from a query string in document
+ * order (case-insensitive key with `_`/`-` equivalent, each value
+ * percent-decoded, `+` preserved).
+ * Shared by `getUrlArg` and server-side repeatable params (`url`, `group`,
+ * `ruleset`) so both entrypoints decode identically.
  */
-export function getUrlArg(query: string, key: string): string {
+export function getAllUrlArgs(query: string, key: string): string[] {
   if (query === "") {
-    return "";
+    return [];
   }
   // Tolerate full links (`tg://socks?server=...`, `vless://...?type=...`):
   // strip any fragment and everything up to the first `?` so the first
@@ -32,22 +40,31 @@ export function getUrlArg(query: string, key: string): string {
   const qIndex = hashCut.indexOf("?");
   const rawQuery = qIndex >= 0 ? hashCut.slice(qIndex + 1) : hashCut;
   const normalized = rawQuery.startsWith("?") ? rawQuery.slice(1) : rawQuery;
-  const parts = normalized.split("&");
-  let found = "";
-  const target = key.toLowerCase();
-  for (const part of parts) {
+  const values: string[] = [];
+  const target = normalizeQueryKey(key);
+  for (const part of normalized.split("&")) {
     if (part === "") {
       continue;
     }
     const eq = part.indexOf("=");
     const rawKey = eq >= 0 ? part.slice(0, eq) : part;
-    if (rawKey.toLowerCase() !== target) {
+    // Keys are rarely encoded, but decode before normalizing so
+    // `add%5Femoji` matches `add_emoji` like values already do.
+    if (normalizeQueryKey(urlDecode(rawKey)) !== target) {
       continue;
     }
-    const rawValue = eq >= 0 ? part.slice(eq + 1) : "";
-    found = urlDecode(rawValue);
+    values.push(urlDecode(eq >= 0 ? part.slice(eq + 1) : ""));
   }
-  return found.trim();
+  return values;
+}
+
+/**
+ * Read a parameter from a query string, mirroring subconverter's
+ * `getUrlArg` (last occurrence wins, value percent-decoded).
+ */
+export function getUrlArg(query: string, key: string): string {
+  const values = getAllUrlArgs(query, key);
+  return values.length > 0 ? (values[values.length - 1] as string).trim() : "";
 }
 
 /** Split a URL into its scheme/authority-specific parts without a URL parser. */

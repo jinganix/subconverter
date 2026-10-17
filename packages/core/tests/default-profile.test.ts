@@ -67,10 +67,13 @@ describe("default profile", () => {
 });
 
 describe("generate includeRules", () => {
-  it("emits no rules by default (legacy)", () => {
-    const out = generate([ssNode()], { target: TargetFormat.Clash });
-    expect(out).not.toContain("rules:");
-    expect(out).not.toContain("Rule:");
+  it("emits bundled rules by default", () => {
+    const out = generate([ssNode()], {
+      settings: { clashNewFieldName: true },
+      target: TargetFormat.Clash,
+    });
+    expect(out).toContain("rules:");
+    expect(out).toContain("GEOIP,CN");
   });
 
   it("injects bundled groups and rules when opted in", () => {

@@ -235,7 +235,10 @@ export function proxyToSsd(nodes: Proxy[], group: string, userinfo: string): str
     const download = getUrlArg(data, "download");
     const total = getUrlArg(data, "total");
     const expiry = getUrlArg(data, "expire");
-    const gb = 1024 ** 3;
+    // SSD reports traffic in decimal GB (1 GB = 1000^3 bytes) per spec,
+    // distinct from Clash `subscription-userinfo` clients that divide by
+    // 1024^3 (see `scaleDecimalBytes` in userinfo.ts).
+    const gb = 1000 ** 3;
     doc.traffic_used = (Number(upload || 0) + Number(download || 0)) / gb;
     doc.traffic_total = Number(total || 0) / gb;
     if (expiry !== "") {

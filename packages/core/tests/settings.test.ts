@@ -150,4 +150,26 @@ describe("parseRequestSettings", () => {
   it("defaults unknown targets to auto", () => {
     expect(parseRequestSettings("target=bogus").target).toBe(TargetFormat.Auto);
   });
+
+  it("treats underscore and hyphen keys as equivalent", () => {
+    expect(parseRequestSettings("add-emoji=true").addEmoji).toBe(true);
+    expect(parseRequestSettings("add_emoji=true").addEmoji).toBe(true);
+    expect(parseRequestSettings("filter-deprecated=true").filterDeprecated).toBe(true);
+    expect(parseRequestSettings("append-type=true").appendType).toBe(true);
+    expect(parseRequestSettings("new-field-name=false").newFieldName).toBe(false);
+    expect(parseRequestSettings("ADD_EMOJI=TRUE").addEmoji).toBe(true);
+  });
+
+  it("parses sort and dedupe flags", () => {
+    expect(parseRequestSettings("sort=true").sort).toBe(true);
+    expect(parseRequestSettings("sort=1").sort).toBe(true);
+    expect(parseRequestSettings("sort=false").sort).toBe(false);
+    expect(parseRequestSettings("sort_flag=true").sort).toBe(true);
+    expect(parseRequestSettings("sort-flag=1").sort).toBe(true);
+    expect(parseRequestSettings("dedupe=true").dedupe).toBe(true);
+    expect(parseRequestSettings("deduplicate=1").dedupe).toBe(true);
+    expect(parseRequestSettings("dedupe=false").dedupe).toBe(false);
+    expect(parseRequestSettings("target=clash").sort).toBe(false);
+    expect(parseRequestSettings("target=clash").dedupe).toBe(false);
+  });
 });
