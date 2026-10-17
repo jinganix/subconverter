@@ -1,6 +1,6 @@
 {
   "name": "@subconverter/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Command-line interface for subconverter-ts.",
   "license": "GPL-3.0",
   "type": "module",
@@ -37,8 +37,8 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@subconverter/core": "0.1.0",
-    "@subconverter/node": "0.1.0"
+    "@subconverter/core": "0.2.0",
+    "@subconverter/node": "0.2.0"
   },
   "devDependencies": {
     "tsup": "^8.5.0",
