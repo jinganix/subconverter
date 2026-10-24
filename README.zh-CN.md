@@ -12,6 +12,8 @@
 
 [English](README.md) | 简体中文
 
+当前版本：**v0.2.0** —— 变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+
 [tindy2013/subconverter](https://github.com/tindy2013/subconverter) 的 TypeScript 重写版本：
 一个同构的订阅转换器，可运行于 **Node.js**、**浏览器** 以及 **CLI**。
 
@@ -90,28 +92,39 @@ Clash YAML → Surge INI → base64/明文链接列表）。
 ### 输出：目标格式
 
 `generate(nodes, { target, ... })`；`TargetFormat` 定义见
-`packages/core/src/types/settings.ts`。各目标不支持的节点会被静默丢弃（见末列）。
+`packages/core/src/types/settings.ts`。每条先写输出形态，再写该目标会静默丢弃的节点类型。
 
-| `target`    | 文件 / Content-Type                 | 输出形态                                                                                                                                                            | 会丢弃的节点                                                                                          |
-| ----------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `clash`     | `clash.yaml` / `text/yaml`          | Clash YAML，默认 `proxies`/`proxy-groups`/`rules`；`legacy=true` 切回 `Proxy`/`Proxy Group`/`Rule`；新字段名下输出 `dialer-proxy`；VLESS 支持 `flow`/`reality-opts` | —（全协议）                                                                                           |
-| `clashr`    | `clashr.yaml` / `text/yaml`         | ClashR YAML（字段规则同 `clash`）                                                                                                                                   | —（全协议）                                                                                           |
-| `surge`     | `surge.conf` / `text/plain`         | Surge v2/v3/v4/v5（`surge_version`，默认 **5**）；proxy + proxy-group 段落、WireGuard 子段落、基础配置保留；Trojan ws 参数、`hysteria2` 命名                        | VLESS、TUIC、Hysteria v1；VMess/Trojan/WireGuard/Hysteria2/AnyTLS 需 v4+；SSR 需 `surgeSsrPath` + v2+ |
-| `surfboard` | `surfboard.conf` / `text/plain`     | Surge 兼容子集，固定最新版 Surge 行格式                                                                                                                             | Surge 丢弃的全部，另加 Hysteria2、AnyTLS                                                              |
-| `quanx`     | `quanx.conf` / `text/plain`         | Quantumult X `[server_local]`/`[policy]`，含 `vless` 与 REALITY 参数                                                                                                | Snell、WireGuard、Hysteria v1、Hysteria2、TUIC、AnyTLS                                                |
-| `quan`      | `quan.conf` / `text/plain`          | Quantumult `[SERVER]`/`[POLICY]`                                                                                                                                    | VLESS、Trojan、Snell、WireGuard、Hysteria*、TUIC、AnyTLS                                              |
-| `loon`      | `loon.conf` / `text/plain`          | Loon `Proxy`/`Proxy Group`，含 `VLESS` 与 REALITY 参数                                                                                                              | Snell、Hysteria v1、TUIC、AnyTLS                                                                      |
-| `mellow`    | `mellow.conf` / `text/plain`        | Mellow `[Endpoint]`/`[EndpointGroup]`、由规则集生成的 `[RoutingRule]`                                                                                               | 仅保留 SS（无插件）、VMess、SOCKS5、HTTP，其余丢弃                                                    |
-| `singbox`   | `singbox.json` / `application/json` | sing-box JSON `outbounds`（selector/urltest 分组、由规则集生成的 `route.rules`/`route.final`）                                                                      | SSR（无对应映射）、Snell                                                                              |
-| `v2ray`     | `v2ray.txt` / `text/plain`          | base64 VMess 链接列表                                                                                                                                               | 非 VMess                                                                                              |
-| `ss`        | `ss.txt` / `text/plain`             | base64 SS 链接列表（去重）                                                                                                                                          | 非 SS（`origin`/`plain` 的 SSR 可降级为 SS）                                                          |
-| `ssr`       | `ssr.txt` / `text/plain`            | base64 SSR 链接列表                                                                                                                                                 | 非 SSR                                                                                                |
-| `trojan`    | `trojan.txt` / `text/plain`         | base64 Trojan 链接列表                                                                                                                                              | 非 Trojan                                                                                             |
-| `mixed`     | `mixed.txt` / `text/plain`          | base64 混合 SS/SSR/VMess/Trojan 列表（经典子集）                                                                                                                    | VLESS、Hysteria2、TUIC、AnyTLS 等                                                                     |
-| `nodelist`  | `nodelist.txt` / `text/plain`       | 纯节点列表，无分组/包装                                                                                                                                             | —                                                                                                     |
-| `ssd`       | `ssd.txt` / `text/plain`            | `ssd://` 文档（仅 SS 节点）                                                                                                                                         | 非 SS                                                                                                 |
-| `sssub`     | `sssub.json` / `application/json`   | SIP008 JSON（仅 SS 节点）                                                                                                                                           | 非 SS                                                                                                 |
-| `auto`      | —                                   | 仅输入检测，不可作为 `/sub?target=`                                                                                                                                 | —                                                                                                     |
+- `clash`（`clash.yaml`，`text/yaml`）——`proxies`/`proxy-groups`/`rules`；`legacy=true`
+  切回 `Proxy`/`Proxy Group`/`Rule`；新字段名下输出 `dialer-proxy`；VLESS 支持
+  `flow`/`reality-opts`。不丢节点。
+- `clashr`（`clashr.yaml`，`text/yaml`）——ClashR YAML，字段规则同 `clash`。不丢节点。
+- `surge`（`surge.conf`，`text/plain`）——Surge v2–v5（`surge_version`，默认 5）；
+  proxy + proxy-group 段落、WireGuard 子段落、基础配置保留；Trojan `ws` 参数、
+  `hysteria2` 命名。丢弃 VLESS、TUIC、Hysteria v1；
+  VMess/Trojan/WireGuard/Hysteria2/AnyTLS 需 v4+；SSR 需 `surgeSsrPath` 且 v2+。
+- `surfboard`（`surfboard.conf`，`text/plain`）——固定最新版 Surge 行格式。丢弃 Surge
+  丢弃的全部，另加 Hysteria2、AnyTLS。
+- `quanx`（`quanx.conf`，`text/plain`）——`[server_local]`/`[policy]`，含 `vless`
+  与 REALITY 参数。丢弃 Snell、WireGuard、Hysteria v1/v2、TUIC、AnyTLS。
+- `quan`（`quan.conf`，`text/plain`）——`[SERVER]`/`[POLICY]`。丢弃 VLESS、Trojan、
+  Snell、WireGuard、Hysteria*、TUIC、AnyTLS。
+- `loon`（`loon.conf`，`text/plain`）——`Proxy`/`Proxy Group`，含 `VLESS` 与 REALITY
+  参数。丢弃 Snell、Hysteria v1、TUIC、AnyTLS。
+- `mellow`（`mellow.conf`，`text/plain`）——`[Endpoint]`/`[EndpointGroup]`，以及由规则集
+  生成的 `[RoutingRule]`。仅保留无插件 SS、VMess、SOCKS5、HTTP。
+- `singbox`（`singbox.json`，`application/json`）——`outbounds`（selector/urltest 分组）、
+  由规则集生成的 `route.rules`/`route.final`。丢弃 SSR、Snell。
+- `v2ray`（`v2ray.txt`，`text/plain`）——base64 VMess 链接列表。丢弃非 VMess。
+- `ss`（`ss.txt`，`text/plain`）——base64 SS 链接列表（去重）；`origin`/`plain` 的 SSR
+  可降级为 SS。丢弃非 SS。
+- `ssr`（`ssr.txt`，`text/plain`）——base64 SSR 链接列表。丢弃非 SSR。
+- `trojan`（`trojan.txt`，`text/plain`）——base64 Trojan 链接列表。丢弃非 Trojan。
+- `mixed`（`mixed.txt`，`text/plain`）——base64 混合 SS/SSR/VMess/Trojan 列表（经典
+  子集）。丢弃 VLESS、Hysteria2、TUIC、AnyTLS。
+- `nodelist`（`nodelist.txt`，`text/plain`）——纯节点列表，无分组/包装。不丢节点。
+- `ssd`（`ssd.txt`，`text/plain`）——`ssd://` 文档。丢弃非 SS。
+- `sssub`（`sssub.json`，`application/json`）——SIP008 JSON。丢弃非 SS。
+- `auto`——仅输入检测，不可作为 `/sub?target=`。
 
 > 支持的协议与节点格式会持续补充：新增链接协议、传输方式（`ws`/`grpc`/`h2`/`http`）
 > 或 TLS 模式（如 REALITY）时，请同步扩展 `packages/core/tests/` 下的静态矩阵
@@ -147,6 +160,15 @@ npm run lint       # eslint（flat 配置），带 --max-warnings 0
 npm test           # vitest
 npm run format     # prettier
 ```
+
+## 文档
+
+- [`docs/API.md`](docs/API.md)——所有公开导出，含签名、枚举成员与接口字段。由
+  `npm run docs:api` 从各包 barrel 生成；`npm run docs:check`（已并入 `npm run check`）
+  会在文件过期时报错。
+- [`llms.txt`](llms.txt)——面向 LLM 与 agent 工具的紧凑索引。
+- [`CHANGELOG.md`](CHANGELOG.md)——版本变更记录。
+- [`AGENTS.md`](AGENTS.md)——编码 agent 指南（分层、命令、约定）。
 
 ## CLI
 
@@ -236,7 +258,7 @@ subconverter serve --geoip /data/GeoLite2-Country.mmdb
 ```
 
 另有 `GET /`（用法说明）与 `GET /version`。仅支持 `GET`/`HEAD`，已启用 CORS。
-响应按目标设置 `Content-Type`（见上表）、`Content-Disposition: attachment`，
+响应按目标设置 `Content-Type`（见上方目标格式列表）、`Content-Disposition: attachment`，
 并在可用时透传 `subscription-userinfo` / `profile-update-interval`。
 限制：仅 `http(s)` URL、最多 5 个订阅 URL（`|` 分隔或重复 `url` 参数）、
 15 s 拉取超时、单体 5 MB 上限。服务端的 `config`/`base` 只接受远端 `http(s)`
@@ -244,25 +266,33 @@ URL（拒绝本地路径）；`[]RULE` 内联规则集不受影响。
 
 ### 查询参数
 
-| 参数                                                                                                                                                                             | 别名                                                  | 默认值                | 说明                                                         |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------- | ------------------------------------------------------------ |
-| `target`                                                                                                                                                                         | —                                                     | `clash`               | 输出格式（见输出表；`auto` 非法）                            |
-| `url`                                                                                                                                                                            | —                                                     | —                     | 订阅 URL，可重复，多个可用 `\|` 分隔                         |
-| `config`                                                                                                                                                                         | —                                                     | —                     | 远端 `http(s)` 外部 INI（`[]` 忽略；本地路径拒绝）           |
-| `ruleset`                                                                                                                                                                        | `rulesets`                                            | —                     | `group,url[,interval]` 或 `group,[]RULE`，可重复，`\|` 分隔  |
-| `group`                                                                                                                                                                          | —                                                     | —                     | 额外 select 分组名（可重复）                                 |
-| `interval`                                                                                                                                                                       | —                                                     | 上游值                | 覆盖 `profile-update-interval` 响应头                        |
-| `surge_version`                                                                                                                                                                  | `surge-version`、`ver`、`version`                     | `5`                   | Surge 目标版本                                               |
-| `new_field_name`                                                                                                                                                                 | `new_name`、连字符变体                                | `true`                | Clash 新字段名；裸 `?flag` 视为 `true`                       |
-| `legacy`                                                                                                                                                                         | `legacy_field_name`、`legacy-field-name`              | `false`               | 旧版 `Proxy`/`Proxy Group`/`Rule`（优先于 `new_field_name`） |
-| `with_rules`                                                                                                                                                                     | `with-rules`                                          | `true`                | 附加规则 + 默认分组（兼容保留）                              |
-| `no_rules`                                                                                                                                                                       | `no-rules`                                            | `false`               | 去掉规则与默认分组                                           |
-| `auto_country`                                                                                                                                                                   | `auto-country`                                        | 配置 `--geoip` 时开启 | 给缺少国家/地区的名字加 GeoIP 前缀                           |
-| `name_regex`                                                                                                                                                                     | —                                                     | —                     | 重命名前对名字做 `匹配@替换` 正则替换（可重复）              |
-| `name_remove`                                                                                                                                                                    | —                                                     | —                     | 重命名前按逗号分隔的字面量删除名字片段                       |
-| `userinfo_url`                                                                                                                                                                   | `userinfo-url`、`userinfo`                            | —                     | 额外流量接口（见下）                                         |
-| `userinfo_provider`                                                                                                                                                              | `userinfo-provider`、`userinfo_type`、`userinfo-type` | 自动识别              | 流量转换器（见下）                                           |
-| `rename`、`emoji`、`include`、`exclude`、`add_emoji`、`remove_emoji`、`append_type`、`sort`、`filter_deprecated`、`dedupe`、`tfo`、`udp`、`scv`、`tls13`、`insert`、`classical`… | 下划线/连字符、大小写不敏感                           | —                     | `parseRequestSettings` 解析的全部开关                        |
+括号内为默认值；下划线参数同时接受连字符别名。
+
+- `target`（`clash`）——输出格式（见上方目标格式列表；`auto` 非法）。
+- `url`——订阅 URL，可重复，多个用 `|` 分隔。
+- `config`——远端 `http(s)` 外部 INI（`[]` 忽略；拒绝本地路径）。
+- `ruleset`（别名 `rulesets`）——`group,url[,interval]` 或 `group,[]RULE`，可重复，
+  `|` 分隔。
+- `group`——额外 select 分组名（可重复）。
+- `interval`（上游值）——覆盖 `profile-update-interval` 响应头。
+- `surge_version`（别名 `surge-version`、`ver`、`version`；默认 `5`）——Surge 目标版本。
+- `new_field_name`（别名 `new_name` 及连字符变体；默认 `true`）——Clash 新字段名；
+  裸 `?flag` 视为 `true`。
+- `legacy`（别名 `legacy_field_name`、`legacy-field-name`；默认 `false`）——旧版
+  `Proxy`/`Proxy Group`/`Rule`，优先于 `new_field_name`。
+- `with_rules`（`with-rules`；默认 `true`）——附加规则 + 默认分组（兼容保留）。
+- `no_rules`（`no-rules`；默认 `false`）——去掉规则与默认分组。
+- `auto_country`（`auto-country`）——给缺少国家/地区的名字加前缀；服务端带 `--geoip`
+  时默认开启。
+- `name_regex`——重命名前对名字做 `匹配@替换` 正则替换（可重复）。
+- `name_remove`——重命名前按逗号分隔的字面量删除名字片段。
+- `userinfo_url`（别名 `userinfo-url`、`userinfo`）——额外流量接口（见下）。
+- `userinfo_provider`（别名 `userinfo-provider`、`userinfo_type`、`userinfo-type`；
+  自动识别）——流量转换器（见下）。
+- `parseRequestSettings` 解析的其余开关（`rename`、`emoji`、`include`、`exclude`、
+  `add_emoji`、`remove_emoji`、`append_type`、`sort`、`filter_deprecated`、`dedupe`、
+  `tfo`、`udp`、`scv`、`tls13`、`insert`、`classical`…）均接受下划线/连字符，
+  大小写不敏感。
 
 ### 流量信息（`userinfo_url`）
 
@@ -273,11 +303,15 @@ URL（拒绝本地路径）；`[]RULE` 内联规则集不受影响。
 GET /sub?target=clash&url=<订阅>&userinfo_url=<流量接口>&userinfo_provider=jms
 ```
 
-| 转换器         | 别名                                           | 接受                                                                                          | 输出                                                                                                                  |
-| -------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `auto`（默认） | —                                              | JMS JSON → 通用 JSON → header 字符串依次尝试                                                  | `subscription-userinfo` 响应头值                                                                                      |
-| `jms`          | `justmysocks`、`just-my-socks`                 | Just-My-Socks JSON（`monthly_bw_limit_b`、`bw_counter_b`、`bw_reset_day_of_month`，兼容驼峰） | `upload=0; download=…; total=…; expire=…`；十进制 GB 换算成二进制字节以便客户端显示标称值；`expire` 为下一个 UTC 零点 |
-| `subscription` | `raw`、`sub`、`clash`、`subscription-userinfo` | `subscription-userinfo` 风格的值或通用 JSON                                                   | 规范化后透传                                                                                                          |
+`auto`（默认）依次尝试 JMS JSON、通用 JSON、header 字符串，并统一输出
+`subscription-userinfo` 响应头值。各转换器：
+
+- `jms`（别名 `justmysocks`、`just-my-socks`）——接受 Just-My-Socks JSON
+  （`monthly_bw_limit_b`、`bw_counter_b`、`bw_reset_day_of_month`，兼容驼峰），输出
+  `upload=0; download=…; total=…; expire=…`；十进制 GB 换算成二进制字节以便客户端显示
+  标称值，`expire` 为下一个 UTC 零点。
+- `subscription`（别名 `raw`、`sub`、`clash`、`subscription-userinfo`）——接受
+  `subscription-userinfo` 风格的值或通用 JSON，规范化后透传。
 
 不传 `userinfo_url` 时透传订阅自身的 `subscription-userinfo` 响应头；
 传入后以前者为准（未显式指定 provider 时，仅转换 JMS 这类已知形状）。
@@ -305,7 +339,8 @@ const server = await startServer({ host: "0.0.0.0", port: 25500 });
 ## 发版
 
 四个包同版本推进。根`package.json`的版本号是唯一可信源，`scripts/sync-versions.mjs`
-负责同步到`packages/*`和`package-lock.json`。
+负责同步到`packages/*`、`package-lock.json`，以及中英 README 的`当前版本`行，
+保证发布页面与 npm 版本一致。
 
 1. 先在仓库`Secrets`里配好`ACTION_TOKEN`（带`repo` + `workflow`权限的PAT）。npm
    认证不需要token：本仓库用[Trusted Publishing](https://docs.npmjs.com/trusted-publishers/)

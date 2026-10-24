@@ -1,0 +1,89 @@
+# subconverter-ts
+
+> TypeScript rewrite of tindy2013/subconverter: an isomorphic subscription converter. It parses
+> proxy share links and client configs (Clash, Surge, Quantumult X, Loon, sing-box, ss/ssr/vmess/
+> vless/trojan/hysteria2/tuic/anytls/ssd/base64 lists) into one proxy model and re-emits them in
+> the target format. Runs on Node.js, in the browser, and as a CLI.
+
+## Key facts
+
+- Repository: https://github.com/jinganix/subconverter (GPL-3.0)
+- npm packages: `@subconverter/core`, `@subconverter/node`, `@subconverter/browser`,
+  `@subconverter/cli` (all versioned in lockstep)
+- Runtime: Node.js >= 22; browser build ships ESM plus the IIFE global `SubConverter`
+- Layout: npm workspaces monorepo with a one-way dependency graph `core` ← `node`/`browser` ← `cli`
+- `packages/core` is platform-free: no `node:*` imports and no DOM globals
+- Default behavior: rules are ON. `generate()` with no rulesets falls back to bundled
+  upstream-like defaults; pass `includeRules: false` (`no_rules` / `--no-rules`) to strip them
+- Surge target defaults to version 5 (`surgeVersion`)
+- Entry points: `parseSubscription()` → `Proxy[]`, `generate(nodes, { target })` → `string`,
+  `TargetFormat` enum for the output target
+- Targets: `clash`, `clashr`, `surge`, `surfboard`, `quanx`, `quan`, `loon`, `mellow`,
+  `singbox`, `v2ray`, `trojan`, `ss`, `ssr`, `sssub`, `ssd`, `mixed`, `nodelist`, `auto`
+  (parsing only). Each target drops unsupported node types silently
+- Protocols: `ss`, `ssr`, `vmess`, `vless`, `trojan`, `socks5`, `http`/`https`, `hysteria`,
+  `hysteria2`, `tuic`, `anytls`, `wireguard`, `snell`
+- HTTP server: `startServer()` in `@subconverter/node`, plus the `subconverter serve` CLI command
+- Faithful port: when changing parser/generator behavior, mirror upstream
+  tindy2013/subconverter semantics exactly, including quirks
+
+## Docs
+
+- [README](https://github.com/jinganix/subconverter/blob/main/README.md): install, full input/
+  output format matrix, CLI flags, server query parameters, quota handling, programmatic use
+- [README (Chinese)](https://github.com/jinganix/subconverter/blob/main/README.zh-CN.md)
+- [API reference](https://github.com/jinganix/subconverter/blob/main/docs/API.md): every public
+  symbol generated from the package barrels, with signatures, enum members, and interface fields
+- [CHANGELOG](https://github.com/jinganix/subconverter/blob/main/CHANGELOG.md): release notes
+- [AGENTS.md](https://github.com/jinganix/subconverter/blob/main/AGENTS.md): coding-agent guide —
+  layering rules, commands, conventions, testing requirements
+- [CONTRIBUTING.md](https://github.com/jinganix/subconverter/blob/main/CONTRIBUTING.md):
+  Conventional Commits, scopes, validation gate
+
+## Source map
+
+- `packages/core/src/index.ts`: public API barrel (single source of truth; `docs/API.md` and
+  `llms.txt` describe only what it exports)
+- `packages/core/src/parser/`: link and config parsers (`subscription.ts` auto-detects input)
+- `packages/core/src/generator/`: one module per output target (`clash.ts`, `surge.ts`,
+  `singbox.ts`, `loon.ts`, `quanx.ts`, ...), plus `nodes.ts` for rename/emoji/country handling
+- `packages/core/src/engine.ts`: `generate()`, the isomorphic generation entry point
+- `packages/core/src/types/`: `Proxy`, `TargetFormat`, `ExtraSettings`, proxy groups, rulesets
+- `packages/core/src/settings/`: external INI parsing and `/sub` query-string parsing
+- `packages/node/src/index.ts`: fetch/fs loading, conversion pipeline, GeoIP resolver
+- `packages/node/src/server.ts`: `/sub`, `/version`, and usage routes
+- `packages/browser/src/index.ts`: browser loading plus core re-exports
+- `packages/cli/src/cli.ts`: argument parsing and the `convert` / `serve` / `parse` / `formats`
+  commands
+
+## Commands
+
+```bash
+npm install
+npm run build          # tsup bundles for every package
+npm run typecheck      # tsc per package
+npm run lint           # eslint, zero warnings
+npm test               # vitest
+npm run check          # typecheck + lint + test + docs freshness
+npm run docs:api       # regenerate docs/API.md from the barrels
+npm run docs:check     # docs/API.md + README enum coverage drift guard
+```
+
+## Usage
+
+```ts
+import { generate, parseSubscription, TargetFormat } from "@subconverter/core";
+
+const nodes = parseSubscription(await response.text());
+const clash = generate(nodes, { target: TargetFormat.Clash });
+```
+
+```bash
+subconverter convert --url https://example.com/sub --target clash --out clash.yaml
+subconverter serve --port 25500 --host 0.0.0.0
+```
+
+## Optional
+
+- [Upstream project](https://github.com/tindy2013/subconverter): the C++ implementation this port
+  follows for parser and generator semantics
