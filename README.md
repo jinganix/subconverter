@@ -359,12 +359,19 @@ All four packages move in lockstep. The root `package.json` version is the sourc
 truth; `scripts/sync-versions.mjs` fans it out to `packages/*`, `package-lock.json`, and the
 `Current release` line in both READMEs, so the published pages never disagree with npm.
 
-1. Add repo secret `ACTION_TOKEN` (PAT with `repo` + `workflow`). npm auth needs no
-   token: this repo uses [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/)
-   (OIDC). On npmjs.com, open each package (`@subconverter/core`, `node`, `browser`,
-   `cli`) → Settings → Trusted Publisher → GitHub Actions with org `subconverter`,
-   repo `jinganix/subconverter`, workflow file `release.yml`. The `publish-npm` job
-   already requests `id-token: write` and upgrades to the latest npm CLI.
+1. Add repo secret `ACTION_TOKEN` (PAT with `repo` + `workflow`) for the branch push,
+   PR, and tag steps. npm auth needs no token: this repo uses
+   [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/) (OIDC). On npmjs.com,
+   open each package (`@subconverter/core`, `node`, `browser`, `cli`) → Settings →
+   Trusted Publisher → GitHub Actions, and set the owner to **`jinganix`** (the GitHub
+   owner, not the npm scope `subconverter`), the repository to `subconverter`, and the
+   workflow file to `release.yml`.
+
+   The `publish-npm` job requests `id-token: write` and upgrades to the latest npm CLI.
+   A mismatch in any of those three fields, or a missing binding, makes the registry
+   reject the publish with `403 OIDC permission denied` even though the OIDC exchange
+   itself succeeds.
+
 2. Actions → `RELEASE` → Run workflow. Leave `version` empty to auto-bump (use `bump`
    to pick `patch`/`minor`/`major`); fill `version` with `x.y.z` to pin a release.
 3. The workflow opens `chore: release x.y.z`, auto-merges it, tags `vx.y.z`, creates the
