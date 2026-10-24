@@ -50,7 +50,6 @@ jobs:
       - name: Checkout main
         uses: actions/checkout@v7
         with:
-          token: ${{ secrets.ACTION_TOKEN }}
           fetch-depth: 0
           ref: main
 
@@ -241,10 +240,11 @@ jobs:
           release_version=$(cat /tmp/release_version)
           echo "release_version=${release_version}" >> "${GITHUB_ENV}"
 
+      # Read-only checkout of an existing tag: the default GITHUB_TOKEN is enough,
+      # so publishing does not depend on the ACTION_TOKEN PAT.
       - name: Checkout release tag
         uses: actions/checkout@v7
         with:
-          token: ${{ secrets.ACTION_TOKEN }}
           fetch-depth: 0
           ref: refs/tags/v${{ env.release_version }}
 
