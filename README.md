@@ -367,10 +367,16 @@ truth; `scripts/sync-versions.mjs` fans it out to `packages/*`, `package-lock.js
    owner, not the npm scope `subconverter`), the repository to `subconverter`, and the
    workflow file to `release.yml`.
 
-   The `publish-npm` job requests `id-token: write` and upgrades to the latest npm CLI.
-   A mismatch in any of those three fields, or a missing binding, makes the registry
-   reject the publish with `403 OIDC permission denied` even though the OIDC exchange
-   itself succeeds.
+   Under **Allowed actions**, tick **`npm publish`**. Since 2026-09-03 a new trusted
+   publisher only permits `npm stage publish` by default, which is not what this
+   workflow uses. The `publish-npm` job requests `id-token: write` and upgrades to the
+   latest npm CLI.
+
+   `403 OIDC permission denied for this action` means the binding rejected the publish
+   even though the OIDC exchange and provenance signing succeeded. Check, in order: the
+   three identifier fields above, then whether **`npm publish`** is ticked under
+   Allowed actions. A new binding must complete its first publish within two days or it
+   expires and cannot be edited.
 
 2. Actions → `RELEASE` → Run workflow. Leave `version` empty to auto-bump (use `bump`
    to pick `patch`/`minor`/`major`); fill `version` with `x.y.z` to pin a release.

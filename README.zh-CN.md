@@ -350,8 +350,12 @@ const server = await startServer({ host: "0.0.0.0", port: 25500 });
    npm scope `subconverter`）、Repository 填 `subconverter`、Workflow file 填
    `release.yml`。
 
-   这三项任一不符或未绑定，`publish-npm`任务即使 OIDC 交换成功，registry 仍会拒绝并返回
-   `403 OIDC permission denied`。
+   在 **Allowed actions** 下必须勾选 **`npm publish`**。2026-09-03 之后新建的
+   Trusted Publisher 默认只授权 `npm stage publish`，而本工作流用的是 `npm publish`。
+
+   出现 `403 OIDC permission denied for this action`，说明 OIDC 交换和 provenance
+   签名都成功、但绑定拒绝了这次发布。依次核对上面三个字段，再确认 Allowed actions 里
+   勾选了 **`npm publish`**。新建的绑定必须在两天内完成首次发布，否则会过期且无法编辑。
 
 2. Actions → `RELEASE` → Run workflow。`version`留空即自动bump（用`bump`选
    `patch`/`minor`/`major`），填`x.y.z`则发指定版本。
