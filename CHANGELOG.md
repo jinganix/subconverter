@@ -11,6 +11,20 @@ the same commits.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-24
+
+First release published to npm since 0.1.0: the 0.2.0 GitHub release and tag exist,
+but its `RELEASE` run failed before the npm job, so `latest` on npm stayed at 0.1.0.
+
+### Fixed
+
+- Published packages now include `README.md` and `LICENSE`. The 0.1.0 tarballs shipped
+  only `dist/` and `package.json`, so npmjs.com showed "This package does not have a
+  README" and omitted the license text. npm does not read outside the package directory,
+  so each workspace carries its own LICENSE copy.
+- `npm run check:packages` fails when a tarball is missing its README, LICENSE, declared
+  entry points, or when a package LICENSE drifts from the repository root.
+
 ### Added
 
 - Node name cleanup before renaming: `name_regex` (regex replace with `$1` backrefs) and
@@ -24,6 +38,15 @@ the same commits.
   (`npm run docs:api`), covering every public symbol with signatures, enum members, and
   interface fields.
 - `llms.txt` and this changelog.
+
+### Changed
+
+- `scripts/sync-versions.mjs` also rewrites the `Current release` / `当前版本` marker in
+  both READMEs, and fails when that marker is missing.
+- Compacted the README output-format, query-parameter, and quota tables into lists so no
+  line exceeds 215 characters.
+- Package READMEs rewritten with install, quick start, supported input/output, and API
+  links for the npm package pages.
 
 ## [0.2.0] - 2026-10-17
 
@@ -56,6 +79,7 @@ the same commits.
   sing-box, SIP008, and share-link targets.
 - Node.js, browser (ESM + IIFE `SubConverter`), and CLI packages.
 
-[Unreleased]: https://github.com/jinganix/subconverter/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/jinganix/subconverter/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/jinganix/subconverter/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/jinganix/subconverter/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jinganix/subconverter/releases/tag/v0.1.0
