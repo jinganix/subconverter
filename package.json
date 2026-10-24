@@ -1,7 +1,7 @@
 {
   "name": "subconverter-ts",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "description": "TypeScript rewrite of subconverter: an isomorphic subscription converter for Node.js, the browser, and the CLI.",
   "keywords": [

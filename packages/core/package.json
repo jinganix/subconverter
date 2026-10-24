@@ -1,6 +1,6 @@
 {
   "name": "@subconverter/core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Isomorphic subscription conversion engine for subconverter-ts.",
   "keywords": [
     "subconverter",
