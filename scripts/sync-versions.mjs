@@ -7,6 +7,10 @@ const rootPkgPath = join(repoRoot, "package.json");
 const lockPath = join(repoRoot, "package-lock.json");
 const workspaceDirs = ["packages/core", "packages/node", "packages/browser", "packages/cli"];
 const internalDeps = ["@subconverter/core", "@subconverter/node"];
+// READMEs state the current release; both languages must move together so the
+// published GitHub pages never disagree with package.json.
+const readmePaths = ["README.md", "README.zh-CN.md"].map((name) => join(repoRoot, name));
+const VERSION_PATTERN = "[0-9]+\\.[0-9]+\\.[0-9]+";
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
@@ -33,6 +37,28 @@ function parseArgs() {
     throw new Error(`sync-versions: invalid version ${release}, want x.y.z`);
   }
   return { release };
+}
+
+/**
+ * Rewrite every "vX.Y.Z" release marker in a README. Returns false when the
+ * file has no marker at all, which means the anchor was removed or reworded.
+ */
+function syncReadme(path, version) {
+  const content = readFileSync(path, "utf8");
+  const pattern = new RegExp(`(Current release: \\*\\*v|当前版本：\\*\\*v)${VERSION_PATTERN}`, "g");
+  let matches = 0;
+  const updated = content.replace(pattern, (match, prefix) => {
+    matches += 1;
+    return `${prefix}${version}`;
+  });
+  if (matches === 0) {
+    return "missing";
+  }
+  if (updated !== content) {
+    writeFileSync(path, updated);
+    return "changed";
+  }
+  return "unchanged";
 }
 
 function setVersion(pkg, version) {
@@ -73,6 +99,18 @@ if (setVersion(rootPkg, target)) {
   changed = true;
 }
 writeJson(rootPkgPath, rootPkg);
+
+let missingReadme = false;
+for (const path of readmePaths) {
+  const status = syncReadme(path, target);
+  if (status === "changed") {
+    changed = true;
+  } else if (status === "missing") {
+    // A silently skipped README bump is format drift, never a no-op.
+    console.error(`sync-versions: no version marker found in ${path}`);
+    missingReadme = true;
+  }
+}
 
 for (const dir of workspaceDirs) {
   const path = join(repoRoot, dir, "package.json");
@@ -120,6 +158,10 @@ if (release !== null) {
 }
 writeJson(lockPath, lock);
 
-console.log(
-  changed ? `sync-versions: ${target} (updated)` : `sync-versions: ${target} (unchanged)`,
-);
+if (missingReadme) {
+  process.exitCode = 1;
+} else {
+  console.log(
+    changed ? `sync-versions: ${target} (updated)` : `sync-versions: ${target} (unchanged)`,
+  );
+}
