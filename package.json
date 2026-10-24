@@ -4,6 +4,28 @@
   "version": "0.2.0",
   "type": "module",
   "description": "TypeScript rewrite of subconverter: an isomorphic subscription converter for Node.js, the browser, and the CLI.",
+  "keywords": [
+    "subconverter",
+    "subscription",
+    "clash",
+    "surge",
+    "quantumultx",
+    "loon",
+    "sing-box",
+    "v2ray",
+    "proxy",
+    "typescript",
+    "converter",
+    "geoip"
+  ],
+  "homepage": "https://github.com/jinganix/subconverter#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jinganix/subconverter.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jinganix/subconverter/issues"
+  },
   "license": "GPL-3.0",
   "engines": {
     "node": ">=22"
@@ -22,8 +44,11 @@
     "lint:fix": "npm run lint:fix --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "docs:api": "node scripts/gen-api-docs.mjs",
+    "docs:check": "node scripts/check-docs.mjs",
     "knip": "knip",
-    "check": "npm run typecheck && npm run lint && npm test"
+    "check": "npm run typecheck && npm run lint && npm test && npm run docs:check",
+    "check:packages": "node scripts/check-packages.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

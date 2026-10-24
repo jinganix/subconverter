@@ -2,6 +2,25 @@
   "name": "@subconverter/browser",
   "version": "0.2.0",
   "description": "Browser build of subconverter-ts: an in-page subscription converter.",
+  "keywords": [
+    "subconverter",
+    "subscription",
+    "clash",
+    "surge",
+    "proxy",
+    "converter",
+    "browser",
+    "typescript"
+  ],
+  "homepage": "https://github.com/jinganix/subconverter#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jinganix/subconverter.git",
+    "directory": "packages/browser"
+  },
+  "bugs": {
+    "url": "https://github.com/jinganix/subconverter/issues"
+  },
   "license": "GPL-3.0",
   "type": "module",
   "main": "./dist/index.js",
