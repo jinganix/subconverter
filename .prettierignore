@@ -1,0 +1,3 @@
+# Frozen parser/generator fixtures feed the expected-output snapshots; reformatting
+# them would change what the matrix tests compare, so keep them out of Prettier.
+packages/core/tests/fixtures/

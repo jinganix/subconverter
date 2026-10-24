@@ -26,14 +26,25 @@ Run from the repo root:
 | Test       | `npm test`                               |
 | Coverage   | `npm run test:coverage -w packages/core` |
 | Format     | `npm run format`                         |
+| Docs (API) | `npm run docs:api`                       |
 | Check      | `npm run check`                          |
+| Packages   | `npm run check:packages`                 |
 
-Before committing: `npm run check` (typecheck + lint + test) must be green. The
+Before committing: `npm run check` (typecheck + lint + test + doc freshness) must be
+green. The
 `.githooks/pre-commit` and `pre-push` hooks run the same gate via
 `docs/scripts/check.sh`; enable them once per clone with
 `./docs/scripts/setup-git-hooks.sh`. Commit messages follow
 [CONTRIBUTING.md](CONTRIBUTING.md) (Conventional Commits, enforced by the `commit-msg`
 hook).
+
+## Documentation sources
+
+`docs/API.md` is generated from the package barrels by
+`scripts/gen-api-docs.mjs`; never edit it by hand. Changing an exported signature, an
+enum member, or an interface field means running `npm run docs:api` and committing the
+result (CI runs `npm run docs:check` and fails on drift). `llms.txt` is hand-written:
+update it when the package map, key entry points, or default behavior change.
 
 ## Conventions (mirrors `code-kit` frontend)
 

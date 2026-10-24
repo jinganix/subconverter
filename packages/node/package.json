@@ -2,6 +2,27 @@
   "name": "@subconverter/node",
   "version": "0.2.0",
   "description": "Node.js adapter for subconverter-ts: filesystem, fetch, and config loading.",
+  "keywords": [
+    "subconverter",
+    "subscription",
+    "clash",
+    "surge",
+    "proxy",
+    "converter",
+    "node",
+    "geoip",
+    "maxmind",
+    "typescript"
+  ],
+  "homepage": "https://github.com/jinganix/subconverter#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jinganix/subconverter.git",
+    "directory": "packages/node"
+  },
+  "bugs": {
+    "url": "https://github.com/jinganix/subconverter/issues"
+  },
   "license": "GPL-3.0",
   "type": "module",
   "main": "./dist/index.cjs",

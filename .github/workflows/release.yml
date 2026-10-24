@@ -148,7 +148,7 @@ jobs:
           node scripts/sync-versions.mjs --release "${{ env.release_version }}"
           git config user.email "github-actions@github.com"
           git config user.name "github-actions"
-          git add package.json package-lock.json packages/core/package.json packages/node/package.json packages/browser/package.json packages/cli/package.json
+          git add package.json package-lock.json README.md README.zh-CN.md packages/core/package.json packages/node/package.json packages/browser/package.json packages/cli/package.json
           git diff --cached --quiet || git commit -m "chore: release ${{ env.release_version }}" --quiet
 
       - name: Create pull request
@@ -260,6 +260,9 @@ jobs:
           npm install -g npm@latest
           npm ci
           npm run build
+
+      - name: Verify publishable artifacts
+        run: npm run check:packages
 
       - name: Publish to npm (dependency order)
         run: |

@@ -36,11 +36,17 @@ jobs:
           fi
           echo "$last_msg" | ./docs/scripts/validate-commit-msg.sh /dev/stdin
 
+      - name: Generated docs are fresh
+        run: npm run docs:check
+
       - name: Gate (typecheck + lint + test)
         run: npm run check
 
       - name: Build
         run: npm run build
+
+      - name: Package artifacts include README and LICENSE
+        run: npm run check:packages
 
   codecov:
     name: Codecov

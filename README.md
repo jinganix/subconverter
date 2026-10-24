@@ -12,6 +12,8 @@
 
 English | [简体中文](README.zh-CN.md)
 
+Current release: **v0.2.0** — see [CHANGELOG.md](CHANGELOG.md).
+
 A TypeScript rewrite of [tindy2013/subconverter](https://github.com/tindy2013/subconverter):
 an isomorphic subscription converter that runs on **Node.js**, in the **browser**, and as a
 **CLI**.
@@ -92,29 +94,42 @@ Node manipulation matchers: `!!GROUP=`, `!!GROUPID=`/`!!INSERT=`, `!!TYPE=`,
 ### Output: target formats
 
 `generate(nodes, { target, ... })`; `TargetFormat` values in
-`packages/core/src/types/settings.ts`. Unsupported nodes are silently dropped
-per target (see last column).
+`packages/core/src/types/settings.ts`. Each entry lists the output shape, then the node
+types the target silently drops.
 
-| `target`    | File / Content-Type                 | Output shape                                                                                                                                                             | Dropped nodes                                                                                              |
-| ----------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `clash`     | `clash.yaml` / `text/yaml`          | Clash YAML, default `proxies`/`proxy-groups`/`rules`; `legacy=true` restores `Proxy`/`Proxy Group`/`Rule`; `dialer-proxy` for new names; VLESS `flow`/`reality-opts`     | — (all protocols)                                                                                          |
-| `clashr`    | `clashr.yaml` / `text/yaml`         | ClashR YAML (same field-name rule as `clash`)                                                                                                                            | — (all protocols)                                                                                          |
-| `surge`     | `surge.conf` / `text/plain`         | Surge v2/v3/v4/v5 (`surge_version`, default **5**); proxy + proxy-group sections, WireGuard sub-sections, base-config preservation; Trojan ws params, `hysteria2` naming | VLESS, TUIC, Hysteria v1; VMess/Trojan/WireGuard/Hysteria2/AnyTLS need v4+; SSR needs `surgeSsrPath` + v2+ |
-| `surfboard` | `surfboard.conf` / `text/plain`     | Surge-compatible subset, pinned to the latest Surge line format                                                                                                          | everything Surge drops, plus Hysteria2, AnyTLS                                                             |
-| `quanx`     | `quanx.conf` / `text/plain`         | Quantumult X `[server_local]`/`[policy]`, incl. `vless` + REALITY keys                                                                                                   | Snell, WireGuard, Hysteria v1, Hysteria2, TUIC, AnyTLS                                                     |
-| `quan`      | `quan.conf` / `text/plain`          | Quantumult `[SERVER]`/`[POLICY]`                                                                                                                                         | VLESS, Trojan, Snell, WireGuard, Hysteria*, TUIC, AnyTLS                                                   |
-| `loon`      | `loon.conf` / `text/plain`          | Loon `Proxy`/`Proxy Group`, incl. `VLESS` + REALITY keys                                                                                                                 | Snell, Hysteria v1, TUIC, AnyTLS                                                                           |
-| `mellow`    | `mellow.conf` / `text/plain`        | Mellow `[Endpoint]`/`[EndpointGroup]`, `[RoutingRule]` from rulesets                                                                                                     | everything except SS (no plugin), VMess, SOCKS5, HTTP                                                      |
-| `singbox`   | `singbox.json` / `application/json` | sing-box JSON `outbounds` (selector/urltest groups, `route.rules`/`route.final` from rulesets)                                                                           | SSR (no mapping), Snell                                                                                    |
-| `v2ray`     | `v2ray.txt` / `text/plain`          | base64 VMess-link list                                                                                                                                                   | non-VMess                                                                                                  |
-| `ss`        | `ss.txt` / `text/plain`             | base64 SS-link list (no duplicates)                                                                                                                                      | non-SS (SSR `origin`/`plain` flattened to SS)                                                              |
-| `ssr`       | `ssr.txt` / `text/plain`            | base64 SSR-link list                                                                                                                                                     | non-SSR                                                                                                    |
-| `trojan`    | `trojan.txt` / `text/plain`         | base64 Trojan-link list                                                                                                                                                  | non-Trojan                                                                                                 |
-| `mixed`     | `mixed.txt` / `text/plain`          | base64 mixed SS/SSR/VMess/Trojan list (classic subset)                                                                                                                   | VLESS, Hysteria2, TUIC, AnyTLS, and others                                                                 |
-| `nodelist`  | `nodelist.txt` / `text/plain`       | bare node list, no groups/wrapper                                                                                                                                        | —                                                                                                          |
-| `ssd`       | `ssd.txt` / `text/plain`            | `ssd://` document (SS nodes only)                                                                                                                                        | non-SS                                                                                                     |
-| `sssub`     | `sssub.json` / `application/json`   | SIP008 JSON (SS nodes only)                                                                                                                                              | non-SS                                                                                                     |
-| `auto`      | —                                   | input detection only, not a valid `/sub?target=`                                                                                                                         | —                                                                                                          |
+- `clash` (`clash.yaml`, `text/yaml`) — `proxies`/`proxy-groups`/`rules`; `legacy=true`
+  restores `Proxy`/`Proxy Group`/`Rule`; `dialer-proxy` under the new field names; VLESS
+  `flow`/`reality-opts`. Drops nothing.
+- `clashr` (`clashr.yaml`, `text/yaml`) — ClashR YAML, same field-name rule as `clash`.
+  Drops nothing.
+- `surge` (`surge.conf`, `text/plain`) — Surge v2–v5 (`surge_version`, default 5); proxy
+  and proxy-group sections, WireGuard sub-sections, base-config preservation; Trojan `ws`
+  params and `hysteria2` naming. Drops VLESS, TUIC, and Hysteria v1;
+  VMess/Trojan/WireGuard/Hysteria2/AnyTLS need v4+; SSR needs `surgeSsrPath` and v2+.
+- `surfboard` (`surfboard.conf`, `text/plain`) — latest Surge line format. Drops
+  everything Surge drops, plus Hysteria2 and AnyTLS.
+- `quanx` (`quanx.conf`, `text/plain`) — `[server_local]`/`[policy]`, including `vless`
+  and REALITY keys. Drops Snell, WireGuard, Hysteria v1/v2, TUIC, AnyTLS.
+- `quan` (`quan.conf`, `text/plain`) — `[SERVER]`/`[POLICY]`. Drops VLESS, Trojan, Snell,
+  WireGuard, Hysteria*, TUIC, AnyTLS.
+- `loon` (`loon.conf`, `text/plain`) — `Proxy`/`Proxy Group`, including `VLESS` and
+  REALITY keys. Drops Snell, Hysteria v1, TUIC, AnyTLS.
+- `mellow` (`mellow.conf`, `text/plain`) — `[Endpoint]`/`[EndpointGroup]`, plus
+  `[RoutingRule]` from rulesets. Keeps only SS without plugin, VMess, SOCKS5, and HTTP.
+- `singbox` (`singbox.json`, `application/json`) — `outbounds` (selector/urltest groups),
+  `route.rules`/`route.final` from rulesets. Drops SSR and Snell.
+- `v2ray` (`v2ray.txt`, `text/plain`) — base64 VMess-link list. Drops non-VMess.
+- `ss` (`ss.txt`, `text/plain`) — base64 SS-link list, deduplicated; SSR `origin`/`plain`
+  flattened to SS. Drops non-SS.
+- `ssr` (`ssr.txt`, `text/plain`) — base64 SSR-link list. Drops non-SSR.
+- `trojan` (`trojan.txt`, `text/plain`) — base64 Trojan-link list. Drops non-Trojan.
+- `mixed` (`mixed.txt`, `text/plain`) — base64 mixed SS/SSR/VMess/Trojan list (classic
+  subset). Drops VLESS, Hysteria2, TUIC, AnyTLS.
+- `nodelist` (`nodelist.txt`, `text/plain`) — bare node list, no groups or wrapper. Drops
+  nothing.
+- `ssd` (`ssd.txt`, `text/plain`) — `ssd://` document. Drops non-SS.
+- `sssub` (`sssub.json`, `application/json`) — SIP008 JSON. Drops non-SS.
+- `auto` — input detection only; not a valid `/sub?target=`.
 
 > Supported protocols and node formats grow over time: when a new link scheme,
 > transport (`ws`/`grpc`/`h2`/`http`), or TLS mode (e.g. REALITY) is added,
@@ -154,6 +169,15 @@ npm run lint       # eslint (flat config) with --max-warnings 0
 npm test           # vitest
 npm run format     # prettier
 ```
+
+## Documentation
+
+- [`docs/API.md`](docs/API.md) — every public export with its signature, enum members, and
+  interface fields. Generated from the package barrels by `npm run docs:api`;
+  `npm run docs:check` (part of `npm run check`) fails when it is stale.
+- [`llms.txt`](llms.txt) — compact orientation file for LLM and agent tooling.
+- [`CHANGELOG.md`](CHANGELOG.md) — release notes.
+- [`AGENTS.md`](AGENTS.md) — coding-agent guide (layering, commands, conventions).
 
 ## CLI
 
@@ -247,33 +271,43 @@ subconverter serve --geoip /data/GeoLite2-Country.mmdb
 ```
 
 Also `GET /` (usage) and `GET /version`. Only `GET`/`HEAD` are served, with CORS enabled.
-Responses set `Content-Type` per target (see table), `Content-Disposition: attachment`,
-and forward `subscription-userinfo` / `profile-update-interval` when available.
+Responses set `Content-Type` per target (see the output list above) and
+`Content-Disposition: attachment`, and forward `subscription-userinfo` /
+`profile-update-interval` when available.
 Limits: `http(s)` URLs only, at most 5 subscription URLs (`|`-separated or repeatable
 `url`), 15 s fetch timeout, 5 MB body cap. `config`/`base` accept only remote `http(s)`
 URLs (local paths are rejected in server mode); inline `[]RULE` rulesets stay allowed.
 
 ### Query parameters
 
-| Param                                                                                                                                                                              | Aliases                                               | Default           | Description                                                           |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ----------------- | --------------------------------------------------------------------- |
-| `target`                                                                                                                                                                           | —                                                     | `clash`           | Output format (see output table; `auto` rejected)                     |
-| `url`                                                                                                                                                                              | —                                                     | —                 | Subscription URL(s); repeatable, `\|`-separated for multiple          |
-| `config`                                                                                                                                                                           | —                                                     | —                 | Remote `http(s)` external INI (`[]` ignored; local paths rejected)    |
-| `ruleset`                                                                                                                                                                          | `rulesets`                                            | —                 | `group,url[,interval]` or `group,[]RULE`; repeatable, `\|`-separated  |
-| `group`                                                                                                                                                                            | —                                                     | —                 | Extra select-group name (repeatable)                                  |
-| `interval`                                                                                                                                                                         | —                                                     | upstream          | Override `profile-update-interval` response header                    |
-| `surge_version`                                                                                                                                                                    | `surge-version`, `ver`, `version`                     | `5`               | Surge target version                                                  |
-| `new_field_name`                                                                                                                                                                   | `new_name`, hyphen variants                           | `true`            | Clash new field names; bare `?flag` counts as `true`                  |
-| `legacy`                                                                                                                                                                           | `legacy_field_name`, `legacy-field-name`              | `false`           | Legacy `Proxy`/`Proxy Group`/`Rule` keys (overrides `new_field_name`) |
-| `with_rules`                                                                                                                                                                       | `with-rules`                                          | `true`            | Attach rules + default groups (kept for compat)                       |
-| `no_rules`                                                                                                                                                                         | `no-rules`                                            | `false`           | Strip rules and default groups                                        |
-| `auto_country`                                                                                                                                                                     | `auto-country`                                        | on with `--geoip` | Prefix names lacking a country with the GeoIP country                 |
-| `name_regex`                                                                                                                                                                       | —                                                     | —                 | Regex replace applied to names before renaming (repeatable)           |
-| `name_remove`                                                                                                                                                                      | —                                                     | —                 | Literal fragments removed from names before renaming (comma list)     |
-| `userinfo_url`                                                                                                                                                                     | `userinfo-url`, `userinfo`                            | —                 | Extra quota endpoint (see below)                                      |
-| `userinfo_provider`                                                                                                                                                                | `userinfo-provider`, `userinfo_type`, `userinfo-type` | auto-detect       | Quota converter (see below)                                           |
-| `rename`, `emoji`, `include`, `exclude`, `add_emoji`, `remove_emoji`, `append_type`, `sort`, `filter_deprecated`, `dedupe`, `tfo`, `udp`, `scv`, `tls13`, `insert`, `classical`, … | underscore/hyphen, case-insensitive                   | —                 | Every flag parsed by `parseRequestSettings`                           |
+Defaults are shown in parentheses; every underscore param also accepts a hyphen alias.
+
+- `target` (`clash`) — output format (see the output list above; `auto` is rejected).
+- `url` — subscription URL(s); repeatable, `|`-separated for multiple.
+- `config` — remote `http(s)` external INI (`[]` ignored; local paths rejected).
+- `ruleset` (alias `rulesets`) — `group,url[,interval]` or `group,[]RULE`; repeatable,
+  `|`-separated.
+- `group` — extra select-group name (repeatable).
+- `interval` (upstream value) — override the `profile-update-interval` response header.
+- `surge_version` (aliases `surge-version`, `ver`, `version`; default `5`).
+- `new_field_name` (aliases `new_name` and hyphen variants; default `true`) — Clash new
+  field names; a bare `?flag` counts as `true`.
+- `legacy` (aliases `legacy_field_name`, `legacy-field-name`; default `false`) — legacy
+  `Proxy`/`Proxy Group`/`Rule` keys; overrides `new_field_name`.
+- `with_rules` (`with-rules`; default `true`) — attach rules and default groups, kept for
+  compatibility.
+- `no_rules` (`no-rules`; default `false`) — strip rules and default groups.
+- `auto_country` (`auto-country`) — prefix names lacking a country; on by default when the
+  server runs with `--geoip`.
+- `name_regex` — regex replace applied to names before renaming (repeatable).
+- `name_remove` — literal fragments removed from names before renaming (comma list).
+- `userinfo_url` (aliases `userinfo-url`, `userinfo`) — extra quota endpoint (see below).
+- `userinfo_provider` (aliases `userinfo-provider`, `userinfo_type`, `userinfo-type`;
+  auto-detected) — quota converter (see below).
+- All remaining flags parsed by `parseRequestSettings` (`rename`, `emoji`, `include`,
+  `exclude`, `add_emoji`, `remove_emoji`, `append_type`, `sort`, `filter_deprecated`,
+  `dedupe`, `tfo`, `udp`, `scv`, `tls13`, `insert`, `classical`, …) accept underscore or
+  hyphen and are case-insensitive.
 
 ### Quota (`userinfo_url`)
 
@@ -284,11 +318,15 @@ Some providers expose usage on a separate endpoint. Pass it with
 GET /sub?target=clash&url=<sub>&userinfo_url=<quota-url>&userinfo_provider=jms
 ```
 
-| Provider         | Aliases                                        | Accepts                                                                                                 | Emits                                                                                                                                                 |
-| ---------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auto` (default) | —                                              | JMS JSON → generic JSON → header string                                                                 | `subscription-userinfo` header value                                                                                                                  |
-| `jms`            | `justmysocks`, `just-my-socks`                 | Just-My-Socks JSON (`monthly_bw_limit_b`, `bw_counter_b`, `bw_reset_day_of_month`, camelCase tolerated) | `upload=0; download=…; total=…; expire=…`; decimal GB scaled to binary bytes so clients show the advertised quota; `expire` = next UTC-midnight reset |
-| `subscription`   | `raw`, `sub`, `clash`, `subscription-userinfo` | `subscription-userinfo`-style value or generic JSON                                                     | normalized and forwarded                                                                                                                              |
+Provider `auto` (the default) probes JMS JSON, then generic JSON, then a header string, and
+always emits a `subscription-userinfo` header value. Each provider:
+
+- `jms` (aliases `justmysocks`, `just-my-socks`) — accepts Just-My-Socks JSON
+  (`monthly_bw_limit_b`, `bw_counter_b`, `bw_reset_day_of_month`; camelCase tolerated) and
+  emits `upload=0; download=…; total=…; expire=…`, with decimal GB scaled to binary bytes so
+  clients show the advertised quota and `expire` set to the next UTC-midnight reset.
+- `subscription` (aliases `raw`, `sub`, `clash`, `subscription-userinfo`) — accepts a
+  `subscription-userinfo`-style value or generic JSON, then normalizes and forwards it.
 
 Without `userinfo_url`, the server forwards the upstream subscription's
 own `subscription-userinfo` header when present; an explicit
@@ -318,7 +356,8 @@ const server = await startServer({ host: "0.0.0.0", port: 25500 });
 ## Release
 
 All four packages move in lockstep. The root `package.json` version is the source of
-truth; `scripts/sync-versions.mjs` fans it out to `packages/*` and `package-lock.json`.
+truth; `scripts/sync-versions.mjs` fans it out to `packages/*`, `package-lock.json`, and the
+`Current release` line in both READMEs, so the published pages never disagree with npm.
 
 1. Add repo secret `ACTION_TOKEN` (PAT with `repo` + `workflow`). npm auth needs no
    token: this repo uses [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/)

@@ -2,6 +2,28 @@
   "name": "@subconverter/cli",
   "version": "0.2.0",
   "description": "Command-line interface for subconverter-ts.",
+  "keywords": [
+    "subconverter",
+    "subscription",
+    "clash",
+    "surge",
+    "quantumultx",
+    "loon",
+    "sing-box",
+    "proxy",
+    "converter",
+    "cli",
+    "typescript"
+  ],
+  "homepage": "https://github.com/jinganix/subconverter#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jinganix/subconverter.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/jinganix/subconverter/issues"
+  },
   "license": "GPL-3.0",
   "type": "module",
   "bin": {

@@ -2,6 +2,29 @@
   "name": "@subconverter/core",
   "version": "0.2.0",
   "description": "Isomorphic subscription conversion engine for subconverter-ts.",
+  "keywords": [
+    "subconverter",
+    "subscription",
+    "clash",
+    "surge",
+    "quantumultx",
+    "loon",
+    "sing-box",
+    "proxy",
+    "parser",
+    "converter",
+    "isomorphic",
+    "typescript"
+  ],
+  "homepage": "https://github.com/jinganix/subconverter#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jinganix/subconverter.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/jinganix/subconverter/issues"
+  },
   "license": "GPL-3.0",
   "type": "module",
   "main": "./dist/index.cjs",
