@@ -342,12 +342,17 @@ const server = await startServer({ host: "0.0.0.0", port: 25500 });
 负责同步到`packages/*`、`package-lock.json`，以及中英 README 的`当前版本`行，
 保证发布页面与 npm 版本一致。
 
-1. 先在仓库`Secrets`里配好`ACTION_TOKEN`（带`repo` + `workflow`权限的PAT）。npm
-   认证不需要token：本仓库用[Trusted Publishing](https://docs.npmjs.com/trusted-publishers/)
-   （OIDC）。在npmjs.com上打开每个包（`@subconverter/core`、`node`、`browser`、`cli`）
-   → Settings → Trusted Publisher → GitHub Actions，填org `subconverter`、仓库
-   `jinganix/subconverter`、工作流文件`release.yml`。`publish-npm`任务已申请
-   `id-token: write`权限并会升级到最新npm CLI。
+1. 先在仓库`Secrets`里配好`ACTION_TOKEN`（带`repo` + `workflow`权限的PAT），用于推分支、
+   提PR和打标签。npm 认证不需要token：本仓库用
+   [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/)（OIDC）。在npmjs.com
+   上打开每个包（`@subconverter/core`、`node`、`browser`、`cli`）→ Settings →
+   Trusted Publisher → GitHub Actions，Owner 填 **`jinganix`**（GitHub 所有者，不是
+   npm scope `subconverter`）、Repository 填 `subconverter`、Workflow file 填
+   `release.yml`。
+
+   这三项任一不符或未绑定，`publish-npm`任务即使 OIDC 交换成功，registry 仍会拒绝并返回
+   `403 OIDC permission denied`。
+
 2. Actions → `RELEASE` → Run workflow。`version`留空即自动bump（用`bump`选
    `patch`/`minor`/`major`），填`x.y.z`则发指定版本。
 3. 流水线会自动提`chore: release x.y.z`的PR并合并，打`vx.y.z`标签、建GitHub release，
