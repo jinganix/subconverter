@@ -23,8 +23,25 @@ const WORKSPACES = ["packages/core", "packages/node", "packages/browser", "packa
 /** Files the npm registry page and license compliance depend on. */
 const REQUIRED = ["README.md", "LICENSE", "package.json"];
 
-/** Entry points declared in package.json that must exist inside the tarball. */
-function declaredEntries(pkg) {
+/**
+ * File paths from `npm pack --dry-run --json`.
+ *
+ * npm <= 11 prints an array of pack results; npm >= 12 prints an object keyed by
+ * package name. Read both so the check does not break when CI upgrades npm
+ * (`npm install -g npm@latest` in the release workflow).
+ */
+function packFiles(payload) {
+  const results = Array.isArray(payload) ? payload : Object.values(payload ?? {});
+  const result = results.find((entry) => Array.isArray(entry?.files));
+  if (!result) {
+    throw new Error("unexpected npm pack --json output");
+  }
+  return result.files.map((file) => file.path);
+}
+
+/** Entry points declared in package.json that must exist inside the tarball. */ function declaredEntries(
+  pkg,
+) {
   const entries = new Set();
   for (const field of ["main", "module", "types"]) {
     if (typeof pkg[field] === "string") entries.add(pkg[field]);
@@ -82,7 +99,7 @@ for (const workspace of WORKSPACES) {
   let files;
   try {
     const { stdout } = await run("npm", ["pack", "--dry-run", "--json"], { cwd: dir });
-    files = JSON.parse(stdout)[0].files.map((file) => file.path);
+    files = packFiles(JSON.parse(stdout));
   } catch (error) {
     failures.push(`${pkg.name}: npm pack --dry-run failed: ${error.message}`);
     continue;
