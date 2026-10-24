@@ -1,3 +1,4 @@
+import type { Proxy } from "./proxy";
 import type { ProxyGroupConfig } from "./proxy-group";
 import type { RulesetConfig } from "./ruleset";
 import type { TriBool } from "./tribool";
@@ -39,6 +40,15 @@ export interface ExtraSettings {
   emojiArray: RegexMatchConfig[];
   addEmoji: boolean;
   removeEmoji: boolean;
+  /** Prefix node names with the server's country/region when the name lacks one. */
+  autoCountry: boolean;
+  /** Locale used for `Intl.DisplayNames` country names (default `zh-CN`). */
+  countryLocale: string;
+  /**
+   * Resolve a node's ISO 3166-1 alpha-2 country code. Platform-free: the Node
+   * adapter supplies a GeoIP-backed lookup; browsers may supply their own.
+   */
+  countryResolver?: (node: Proxy) => string | undefined;
   appendProxyType: boolean;
   nodeList: boolean;
   sortFlag: boolean;
@@ -66,11 +76,14 @@ export function createExtraSettings(): ExtraSettings {
     addEmoji: false,
     appendProxyType: false,
     authorized: false,
+    autoCountry: false,
     clashClassicalRuleset: false,
     clashNewFieldName: true,
     clashProxiesStyle: "flow",
     clashProxyGroupsStyle: "flow",
     clashScript: false,
+    countryLocale: "zh-CN",
+    countryResolver: undefined,
     dedupe: false,
     emojiArray: [],
     enableRuleGenerator: true,
@@ -103,6 +116,7 @@ export interface RequestSettings {
   excludeRemarks: string[];
   addEmoji: boolean;
   removeEmoji: boolean;
+  autoCountry: boolean;
   appendType: boolean;
   nodeList: boolean;
   dedupe: boolean;

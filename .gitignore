@@ -7,6 +7,9 @@ coverage/
 .DS_Store
 *.log
 
+# local GeoIP databases (download your own, see README)
+data/*.mmdb
+
 # env files (opt in the example file to commit it)
 .env*
 !.env.local.example

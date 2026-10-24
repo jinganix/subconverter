@@ -105,6 +105,7 @@ export function createRequestSettings(): RequestSettings {
   return {
     addEmoji: false,
     appendType: false,
+    autoCountry: false,
     autoExtract: false,
     clashScript: false,
     classicalRuleset: false,
@@ -156,6 +157,7 @@ export function parseRequestSettings(query: string): RequestSettings {
   settings.dedupe = queryBoolFlag(query, "dedupe", "deduplicate") ?? false;
   settings.addEmoji = boolArg(query, "add_emoji");
   settings.removeEmoji = boolArg(query, "remove_emoji");
+  settings.autoCountry = boolArg(query, "auto_country");
   settings.appendType = boolArg(query, "append_type");
   settings.filterDeprecated = boolArg(query, "filter_deprecated");
   settings.newFieldName = resolveNewFieldName(query);

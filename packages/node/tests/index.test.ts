@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { runPreprocess } from "@subconverter/core";
+
 import {
   collectNodes,
   loadNodes,
@@ -164,5 +166,57 @@ describe("ruleset loading", () => {
     });
     expect(input.rulesets).toHaveLength(0);
     expect(input.extraProxyGroup).toHaveLength(0);
+  });
+});
+
+describe("auto country", () => {
+  it("prefixes country names using a local GeoIP database", async () => {
+    const { buildGeoIpFixture } = await import("./mmdb-fixture");
+    const path = join(dir, "geo.mmdb");
+    await writeFile(path, buildGeoIpFixture({ "1.2.3.4": "US", "5.6.7.8": "HK" }));
+    const input = await prepareConversion({
+      geoipPath: path,
+      settings: { autoCountry: true },
+      sources: [
+        { kind: "text", text: "trojan://pw@1.2.3.4:443#server1" },
+        { kind: "text", text: "trojan://pw@5.6.7.8:443#香港-01" },
+      ],
+      target: "clash" as never,
+    });
+    runPreprocess(input.nodes, input.settings);
+    expect(input.nodes.map((node) => node.remark)).toEqual(["美国-server1", "香港-01"]);
+  });
+
+  it("honors a custom country locale", async () => {
+    const { buildGeoIpFixture } = await import("./mmdb-fixture");
+    const path = join(dir, "geo.mmdb");
+    await writeFile(path, buildGeoIpFixture({ "1.2.3.4": "US" }));
+    const input = await prepareConversion({
+      geoipPath: path,
+      settings: { autoCountry: true, countryLocale: "en" },
+      sources: [{ kind: "text", text: "trojan://pw@1.2.3.4:443#server1" }],
+      target: "clash" as never,
+    });
+    runPreprocess(input.nodes, input.settings);
+    expect(input.nodes[0]?.remark).toBe("United States-server1");
+  });
+
+  it("requires a database when autoCountry is on", async () => {
+    await expect(
+      prepareConversion({
+        settings: { autoCountry: true },
+        sources: [{ kind: "text", text: "trojan://pw@1.2.3.4:443#A" }],
+        target: "clash" as never,
+      }),
+    ).rejects.toThrow(/geoipPath/);
+  });
+
+  it("leaves names alone when autoCountry is off", async () => {
+    const input = await prepareConversion({
+      sources: [{ kind: "text", text: "trojan://pw@1.2.3.4:443#server1" }],
+      target: "clash" as never,
+    });
+    expect(input.nodes[0]?.remark).toBe("server1");
+    expect(input.settings.countryResolver).toBeUndefined();
   });
 });

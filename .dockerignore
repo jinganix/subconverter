@@ -9,3 +9,5 @@ docs/
 *.log
 npm-debug.log*
 .tmp/
+# GeoIP databases are mounted at runtime, not baked into the image
+data/

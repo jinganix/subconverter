@@ -237,3 +237,119 @@ describe("cli e2e", () => {
     expect(stdout).toContain("Proxy:");
   });
 });
+
+describe("cli auto country", () => {
+  it("prefixes names lacking a country using a local GeoIP database", async () => {
+    const { buildGeoIpFixture } = await import("../../node/tests/mmdb-fixture");
+    const geoipPath = join(dir, "geo.mmdb");
+    await writeFile(geoipPath, buildGeoIpFixture({ "1.2.3.4": "US", "5.6.7.8": "JP" }));
+    const path = await writeSub(
+      ["trojan://pw@1.2.3.4:443#server1", "trojan://pw@5.6.7.8:443#JP-02"].join("\n"),
+    );
+    const code = await runCli([
+      "convert",
+      "--file",
+      path,
+      "--target",
+      "clash",
+      "--no-rules",
+      "--auto-country",
+      "--geoip",
+      geoipPath,
+    ]);
+    expect(code).toBe(0);
+    expect(stdout).toContain("美国-server1");
+    expect(stdout).toContain("JP-02");
+    expect(stdout).not.toContain("日本-JP-02");
+  });
+
+  it("requires --geoip with --auto-country", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#server1");
+    expect(await runCli(["convert", "--file", path, "--target", "clash", "--auto-country"])).toBe(
+      1,
+    );
+    expect(stderr).toContain("--geoip");
+  });
+
+  it("reports a missing database", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#server1");
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "clash",
+        "--auto-country",
+        "--geoip",
+        join(dir, "missing.mmdb"),
+      ]),
+    ).toBe(1);
+  });
+
+  it("honors --country-locale", async () => {
+    const { buildGeoIpFixture } = await import("../../node/tests/mmdb-fixture");
+    const geoipPath = join(dir, "geo.mmdb");
+    await writeFile(geoipPath, buildGeoIpFixture({ "1.2.3.4": "US" }));
+    const path = await writeSub("trojan://pw@1.2.3.4:443#server1");
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "clash",
+        "--no-rules",
+        "--auto-country",
+        "--geoip",
+        geoipPath,
+        "--country-locale",
+        "en",
+      ]),
+    ).toBe(0);
+    expect(stdout).toContain("United States-server1");
+  });
+});
+
+describe("cli geoip implies auto country", () => {
+  it("prefixes names when only --geoip is given", async () => {
+    const { buildGeoIpFixture } = await import("../../node/tests/mmdb-fixture");
+    const geoipPath = join(dir, "geo.mmdb");
+    await writeFile(geoipPath, buildGeoIpFixture({ "1.2.3.4": "US" }));
+    const path = await writeSub("trojan://pw@1.2.3.4:443#server1");
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "clash",
+        "--node-list",
+        "--geoip",
+        geoipPath,
+      ]),
+    ).toBe(0);
+    expect(stdout).toContain("美国-server1");
+  });
+
+  it("lets --auto-country=false disable the implicit enable", async () => {
+    const { buildGeoIpFixture } = await import("../../node/tests/mmdb-fixture");
+    const geoipPath = join(dir, "geo.mmdb");
+    await writeFile(geoipPath, buildGeoIpFixture({ "1.2.3.4": "US" }));
+    const path = await writeSub("trojan://pw@1.2.3.4:443#server1");
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "clash",
+        "--node-list",
+        "--geoip",
+        geoipPath,
+        "--auto-country=false",
+      ]),
+    ).toBe(0);
+    expect(stdout).not.toContain("美国-server1");
+  });
+});

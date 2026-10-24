@@ -193,6 +193,7 @@ export {
 } from "./generator/links";
 export {
   addEmoji,
+  addCountryPrefix,
   applyMatcher,
   checkIgnore,
   dedupeNodes,
@@ -204,3 +205,10 @@ export {
   processRemark,
   removeEmoji,
 } from "./generator/nodes";
+export {
+  formatCountryRemark,
+  hasRegionName,
+  isRegionCode,
+  regionDisplayName,
+  regionFlag,
+} from "./utils/country";

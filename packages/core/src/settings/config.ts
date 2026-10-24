@@ -15,6 +15,7 @@ export interface ExternalConfig {
   excludeRemarks: string[];
   addEmoji: boolean;
   removeEmoji: boolean;
+  autoCountry: boolean;
   enableRuleGenerator: boolean;
   overwriteOriginalRules: boolean;
   baseFiles: Record<string, string>;
@@ -137,6 +138,7 @@ export function parseRegexMatch(value: string, delimiter: string): RegexMatchCon
 export function parseExternalConfig(content: string): ExternalConfig {
   const result: ExternalConfig = {
     addEmoji: false,
+    autoCountry: false,
     baseFiles: {},
     emoji: [],
     enableRuleGenerator: true,
@@ -207,6 +209,10 @@ export function parseExternalConfig(content: string): ExternalConfig {
           break;
         case "add_emoji":
           result.addEmoji = value.toLowerCase() === "true";
+          break;
+        case "auto_country":
+        case "country":
+          result.autoCountry = value.toLowerCase() === "true";
           break;
         case "remove_old_emoji":
         case "remove_emoji":

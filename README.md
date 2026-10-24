@@ -24,12 +24,12 @@ them into a single proxy model, and re-emits them in the format your client need
 This is an npm-workspaces monorepo with a strict dependency direction
 (`core` ← `node`/`browser` ← `cli`):
 
-| Package            | Purpose                                                                  |
-| ------------------ | ------------------------------------------------------------------------ |
-| `packages/core`    | Platform-free conversion engine: parsers, generators, node manipulation. |
-| `packages/node`    | Node adapter: filesystem + `fetch` subscription loading, HTTP server.    |
-| `packages/browser` | Browser build (ESM + IIFE global `SubConverter`).                        |
-| `packages/cli`     | `subconverter` command-line interface.                                   |
+| Package            | Purpose                                                                        |
+| ------------------ | ------------------------------------------------------------------------------ |
+| `packages/core`    | Platform-free conversion engine: parsers, generators, node manipulation.       |
+| `packages/node`    | Node adapter: filesystem + `fetch` loading, GeoIP country lookup, HTTP server. |
+| `packages/browser` | Browser build (ESM + IIFE global `SubConverter`).                              |
+| `packages/cli`     | `subconverter` command-line interface.                                         |
 
 The engine never imports Node built-ins or DOM globals, so the same code powers all three
 targets.
@@ -178,12 +178,35 @@ Convert flags: `--surge-version` (default **5**), `--new-field-name` (default **
 `--new-field-name=false` for legacy `Proxy` keys), `--legacy` (legacy Clash field names),
 `--with-rules` (default on, kept for compat) / `--no-rules` (strip rules and default groups).
 
+### Country prefix from GeoIP
+
+Names that mention no country/region are prefixed with the server's country, looked up
+from a local MaxMind database (GeoLite2/GeoIP2 Country or City `.mmdb`):
+
+```bash
+subconverter convert --file sub.txt --target clash \
+  --auto-country --geoip ./GeoLite2-Country.mmdb
+# server1 -> 美国-server1
+```
+
+`--country-locale` picks the `Intl.DisplayNames` locale (default `zh-CN`; `en` yields
+`United States-server1`). Names that already carry a region (`香港-01`, `US01`,
+`🇭🇰 HK`, `Hong Kong 01`) are left untouched. Domain servers are resolved through DNS
+first, once per hostname. Download the database from MaxMind (GeoLite2 requires a free
+account) or any compatible mirror; no database is bundled. `data/` is ignored by git, so a
+local copy works well there:
+
+```bash
+mkdir -p data && curl -fL -o data/GeoLite2-Country.mmdb \
+  https://raw.githubusercontent.com/P3TERX/GeoLite.mmdb/download/GeoLite2-Country.mmdb
+```
+
 ## Server (Docker)
 
 ```bash
 docker build -t subconverter-ts .
 docker run -p 25500:25500 subconverter-ts
-# or
+# or, with the GeoIP database mounted for country-prefixed names
 docker compose up --build
 ```
 
@@ -191,6 +214,15 @@ Convert via URL (mirrors upstream `/sub`):
 
 ```text
 GET http://127.0.0.1:25500/sub?target=clash&url=https://example.com/sub
+```
+
+In server mode, start with `--geoip` to enable country-prefixed names (a mounted
+database is enough; `auto_country=false` opts a request out). The database path is
+only read from the command line, never from a query parameter:
+
+```bash
+subconverter serve --geoip /data/GeoLite2-Country.mmdb
+# GET /sub?target=clash&url=...
 ```
 
 Also `GET /` (usage) and `GET /version`. Only `GET`/`HEAD` are served, with CORS enabled.
@@ -202,22 +234,23 @@ URLs (local paths are rejected in server mode); inline `[]RULE` rulesets stay al
 
 ### Query parameters
 
-| Param                                                                                                                                                                              | Aliases                                               | Default     | Description                                                           |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ----------- | --------------------------------------------------------------------- |
-| `target`                                                                                                                                                                           | —                                                     | `clash`     | Output format (see output table; `auto` rejected)                     |
-| `url`                                                                                                                                                                              | —                                                     | —           | Subscription URL(s); repeatable, `\|`-separated for multiple          |
-| `config`                                                                                                                                                                           | —                                                     | —           | Remote `http(s)` external INI (`[]` ignored; local paths rejected)    |
-| `ruleset`                                                                                                                                                                          | `rulesets`                                            | —           | `group,url[,interval]` or `group,[]RULE`; repeatable, `\|`-separated  |
-| `group`                                                                                                                                                                            | —                                                     | —           | Extra select-group name (repeatable)                                  |
-| `interval`                                                                                                                                                                         | —                                                     | upstream    | Override `profile-update-interval` response header                    |
-| `surge_version`                                                                                                                                                                    | `surge-version`, `ver`, `version`                     | `5`         | Surge target version                                                  |
-| `new_field_name`                                                                                                                                                                   | `new_name`, hyphen variants                           | `true`      | Clash new field names; bare `?flag` counts as `true`                  |
-| `legacy`                                                                                                                                                                           | `legacy_field_name`, `legacy-field-name`              | `false`     | Legacy `Proxy`/`Proxy Group`/`Rule` keys (overrides `new_field_name`) |
-| `with_rules`                                                                                                                                                                       | `with-rules`                                          | `true`      | Attach rules + default groups (kept for compat)                       |
-| `no_rules`                                                                                                                                                                         | `no-rules`                                            | `false`     | Strip rules and default groups                                        |
-| `userinfo_url`                                                                                                                                                                     | `userinfo-url`, `userinfo`                            | —           | Extra quota endpoint (see below)                                      |
-| `userinfo_provider`                                                                                                                                                                | `userinfo-provider`, `userinfo_type`, `userinfo-type` | auto-detect | Quota converter (see below)                                           |
-| `rename`, `emoji`, `include`, `exclude`, `add_emoji`, `remove_emoji`, `append_type`, `sort`, `filter_deprecated`, `dedupe`, `tfo`, `udp`, `scv`, `tls13`, `insert`, `classical`, … | underscore/hyphen, case-insensitive                   | —           | Every flag parsed by `parseRequestSettings`                           |
+| Param                                                                                                                                                                              | Aliases                                               | Default           | Description                                                           |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ----------------- | --------------------------------------------------------------------- |
+| `target`                                                                                                                                                                           | —                                                     | `clash`           | Output format (see output table; `auto` rejected)                     |
+| `url`                                                                                                                                                                              | —                                                     | —                 | Subscription URL(s); repeatable, `\|`-separated for multiple          |
+| `config`                                                                                                                                                                           | —                                                     | —                 | Remote `http(s)` external INI (`[]` ignored; local paths rejected)    |
+| `ruleset`                                                                                                                                                                          | `rulesets`                                            | —                 | `group,url[,interval]` or `group,[]RULE`; repeatable, `\|`-separated  |
+| `group`                                                                                                                                                                            | —                                                     | —                 | Extra select-group name (repeatable)                                  |
+| `interval`                                                                                                                                                                         | —                                                     | upstream          | Override `profile-update-interval` response header                    |
+| `surge_version`                                                                                                                                                                    | `surge-version`, `ver`, `version`                     | `5`               | Surge target version                                                  |
+| `new_field_name`                                                                                                                                                                   | `new_name`, hyphen variants                           | `true`            | Clash new field names; bare `?flag` counts as `true`                  |
+| `legacy`                                                                                                                                                                           | `legacy_field_name`, `legacy-field-name`              | `false`           | Legacy `Proxy`/`Proxy Group`/`Rule` keys (overrides `new_field_name`) |
+| `with_rules`                                                                                                                                                                       | `with-rules`                                          | `true`            | Attach rules + default groups (kept for compat)                       |
+| `no_rules`                                                                                                                                                                         | `no-rules`                                            | `false`           | Strip rules and default groups                                        |
+| `auto_country`                                                                                                                                                                     | `auto-country`                                        | on with `--geoip` | Prefix names lacking a country with the GeoIP country                 |
+| `userinfo_url`                                                                                                                                                                     | `userinfo-url`, `userinfo`                            | —                 | Extra quota endpoint (see below)                                      |
+| `userinfo_provider`                                                                                                                                                                | `userinfo-provider`, `userinfo_type`, `userinfo-type` | auto-detect       | Quota converter (see below)                                           |
+| `rename`, `emoji`, `include`, `exclude`, `add_emoji`, `remove_emoji`, `append_type`, `sort`, `filter_deprecated`, `dedupe`, `tfo`, `udp`, `scv`, `tls13`, `insert`, `classical`, … | underscore/hyphen, case-insensitive                   | —                 | Every flag parsed by `parseRequestSettings`                           |
 
 ### Quota (`userinfo_url`)
 

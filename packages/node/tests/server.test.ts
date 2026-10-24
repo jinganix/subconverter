@@ -425,3 +425,61 @@ describe("startServer", () => {
     }
   });
 });
+
+describe("convertSubRequest auto_country", () => {
+  it("prefixes country names from the server GeoIP database", async () => {
+    const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { buildGeoIpFixture } = await import("./mmdb-fixture");
+    const dir = await mkdtemp(join(tmpdir(), "subconverter-server-geoip-"));
+    const geoipPath = join(dir, "geo.mmdb");
+    await writeFile(geoipPath, buildGeoIpFixture({ "1.2.3.4": "US" }));
+    stubFetch(() => new Response(SUB_BODY, { status: 200 }));
+    try {
+      const raw =
+        "target=clash&url=https%3A%2F%2Fexample.com%2Fsub&auto_country=true&no_rules=true";
+      const params = new URLSearchParams(raw);
+      const result = await convertSubRequest(raw, params, { geoipPath });
+      expect(result.body).toContain("美国-Node");
+    } finally {
+      await rm(dir, { force: true, recursive: true });
+    }
+  });
+
+  it("can be disabled explicitly", async () => {
+    const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { buildGeoIpFixture } = await import("./mmdb-fixture");
+    const dir = await mkdtemp(join(tmpdir(), "subconverter-server-geoip-"));
+    const geoipPath = join(dir, "geo.mmdb");
+    await writeFile(geoipPath, buildGeoIpFixture({ "1.2.3.4": "US" }));
+    stubFetch(() => new Response(SUB_BODY, { status: 200 }));
+    try {
+      const raw =
+        "target=clash&url=https%3A%2F%2Fexample.com%2Fsub&auto_country=false&no_rules=true";
+      const params = new URLSearchParams(raw);
+      const result = await convertSubRequest(raw, params, { geoipPath });
+      expect(result.body).not.toContain("美国-Node");
+    } finally {
+      await rm(dir, { force: true, recursive: true });
+    }
+  });
+
+  it("rejects auto_country without a configured database", async () => {
+    stubFetch(() => new Response(SUB_BODY, { status: 200 }));
+    const raw = "target=clash&url=https%3A%2F%2Fexample.com%2Fsub&auto_country=true";
+    const params = new URLSearchParams(raw);
+    await expect(convertSubRequest(raw, params)).rejects.toThrow(/--geoip/);
+  });
+
+  it("ignores a geoip query param (database path is CLI-only)", async () => {
+    stubFetch(() => new Response(SUB_BODY, { status: 200 }));
+    const raw =
+      "target=clash&url=https%3A%2F%2Fexample.com%2Fsub&auto_country=true&geoip=/etc/passwd";
+    const params = new URLSearchParams(raw);
+    const error = await convertSubRequest(raw, params).catch((cause: unknown) => cause);
+    expect((error as { statusCode?: number }).statusCode).toBe(400);
+  });
+});

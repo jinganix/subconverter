@@ -2,10 +2,15 @@ services:
   subconverter:
     build: .
     image: subconverter-ts:latest
-    container_name: subconverter-ts
+    container_name: subconverter
+    command: ["node", "packages/cli/dist/cli.js", "serve", "--geoip", "/data/GeoLite2-Country.mmdb"]
     ports:
       - "25500:25500"
     environment:
       PORT: "25500"
       HOST: "0.0.0.0"
+    volumes:
+      # GeoIP database for country-prefixed node names (`auto_country`).
+      # Download it first: see "Country prefix from GeoIP" in README.md.
+      - ./data:/data:ro
     restart: unless-stopped

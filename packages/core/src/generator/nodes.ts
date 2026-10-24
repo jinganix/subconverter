@@ -1,6 +1,7 @@
 import type { Proxy } from "../types/proxy";
 import { ProxyType } from "../types/proxy";
 import type { RegexMatchConfig } from "../types/settings";
+import { formatCountryRemark, hasRegionName } from "../utils/country";
 
 function toRegex(pattern: string): RegExp {
   try {
@@ -270,12 +271,38 @@ export function nodeRename(node: Proxy, renameArray: RegexMatchConfig[]): void {
   }
 }
 
+/**
+ * Prefix a node's remark with its server country/region when the remark does
+ * not already mention one (e.g. `server1` -> `美国-server1`).
+ *
+ * `resolve` returns an ISO 3166-1 alpha-2 code; a missing/unknown code leaves
+ * the remark untouched. Mirrors the request `auto_country` switch.
+ */
+export function addCountryPrefix(
+  node: Proxy,
+  resolve: (node: Proxy) => string | undefined,
+  locale = "zh-CN",
+): string {
+  const remark = node.remark.trim();
+  if (hasRegionName(remark)) {
+    return node.remark;
+  }
+  const code = resolve(node);
+  if (code === undefined || code === "") {
+    return node.remark;
+  }
+  return formatCountryRemark(remark, code, locale);
+}
+
 export interface PreprocessOptions {
   removeEmoji: boolean;
   addEmoji: boolean;
   sortFlag: boolean;
   renameArray: RegexMatchConfig[];
   emojiArray: RegexMatchConfig[];
+  autoCountry?: boolean;
+  countryLocale?: string;
+  countryResolver?: (node: Proxy) => string | undefined;
 }
 
 /** Apply emoji removal, renaming, emoji insertion, and optional sorting. */
@@ -287,6 +314,13 @@ export function preprocessNodes(nodes: Proxy[], options: PreprocessOptions): voi
     nodeRename(node, options.renameArray);
     if (options.addEmoji) {
       node.remark = addEmoji(node, options.emojiArray);
+    }
+    if (options.autoCountry && options.countryResolver) {
+      node.remark = addCountryPrefix(
+        node,
+        options.countryResolver,
+        options.countryLocale ?? "zh-CN",
+      );
     }
   }
   if (options.sortFlag) {
