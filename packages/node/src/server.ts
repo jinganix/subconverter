@@ -530,6 +530,8 @@ function toExtraSettings(request: RequestSettings, rawQuery: string): ExtraSetti
     dedupe: queryBoolFlag(rawQuery, "dedupe", "deduplicate") ?? false,
     emojiArray: request.emoji,
     filterDeprecated: request.filterDeprecated,
+    nameRegexArray: request.nameRegex,
+    nameRemove: request.nameRemove,
     nodeList: request.nodeList,
     removeEmoji: request.removeEmoji,
     renameArray: request.rename,
@@ -735,6 +737,8 @@ export async function convertSubRequest(
         }
         request.rename.push(...external.rename);
         request.emoji.push(...external.emoji);
+        request.nameRegex.push(...external.nameRegex);
+        request.nameRemove.push(...external.nameRemove);
         if (external.addEmoji) {
           request.addEmoji = true;
         }

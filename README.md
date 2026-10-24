@@ -127,8 +127,9 @@ per target (see last column).
   Surge/QuanX/Quan/Surfboard/Loon rules or sing-box `route` fragments.
 - Proxy-group compilation with all subconverter matchers and group types (select, url-test,
   fallback, load-balance, relay, ssid, smart).
-- External-config parsing (`[custom]` INI: `ruleset`, `custom_proxy_group`, `rename`, `emoji`,
-  include/exclude remarks, base files) and request query-string parsing.
+- External-config parsing (`[custom]` INI: `ruleset`, `custom_proxy_group`, `rename`,
+  `name_regex`, `name_remove`, `emoji`, include/exclude remarks, base files) and request
+  query-string parsing.
 - Lightweight template interpolation (`{{ var }}`) driven by `[template]` variables.
 - Rules are **on by default**: with no explicit `rulesets`/`groups`, generation falls back
   to the bundled upstream-like remote defaults (cached with TTL + single-flight in
@@ -177,6 +178,26 @@ subconverter serve --port 25500 --host 0.0.0.0
 Convert flags: `--surge-version` (default **5**), `--new-field-name` (default **true**,
 `--new-field-name=false` for legacy `Proxy` keys), `--legacy` (legacy Clash field names),
 `--with-rules` (default on, kept for compat) / `--no-rules` (strip rules and default groups).
+
+### Name cleanup before renaming
+
+`--name-regex <match@replacement>` rewrites node names with a JS regex (`$1` backreferences,
+all matches, repeatable) and `--name-remove <a,b>` strips literal fragments (repeatable,
+comma-separated). Both run **before** `--rename`, emoji, `--auto-country`, and sorting, so
+every later rule sees the cleaned name:
+
+```bash
+# abc@server1.xxx.yyy -> server1 -> 美国-server1
+subconverter convert --file sub.txt --target clash \
+  --name-regex '^abc@([^.]+)\..*$@$1' --auto-country --geoip ./GeoLite2-Country.mmdb
+
+# foo.server1.bar -> server1 (separators left by the removal are collapsed)
+subconverter convert --file sub.txt --target clash --name-remove 'foo,bar'
+```
+
+An empty result keeps the original name, and malformed regexes are ignored. In external
+INI configs the same rules are `name_regex=match@replacement` and `name_remove=a,b`; over
+HTTP they are `name_regex` (repeatable) and `name_remove` (comma-separated).
 
 ### Country prefix from GeoIP
 
@@ -248,6 +269,8 @@ URLs (local paths are rejected in server mode); inline `[]RULE` rulesets stay al
 | `with_rules`                                                                                                                                                                       | `with-rules`                                          | `true`            | Attach rules + default groups (kept for compat)                       |
 | `no_rules`                                                                                                                                                                         | `no-rules`                                            | `false`           | Strip rules and default groups                                        |
 | `auto_country`                                                                                                                                                                     | `auto-country`                                        | on with `--geoip` | Prefix names lacking a country with the GeoIP country                 |
+| `name_regex`                                                                                                                                                                       | —                                                     | —                 | Regex replace applied to names before renaming (repeatable)           |
+| `name_remove`                                                                                                                                                                      | —                                                     | —                 | Literal fragments removed from names before renaming (comma list)     |
 | `userinfo_url`                                                                                                                                                                     | `userinfo-url`, `userinfo`                            | —                 | Extra quota endpoint (see below)                                      |
 | `userinfo_provider`                                                                                                                                                                | `userinfo-provider`, `userinfo_type`, `userinfo-type` | auto-detect       | Quota converter (see below)                                           |
 | `rename`, `emoji`, `include`, `exclude`, `add_emoji`, `remove_emoji`, `append_type`, `sort`, `filter_deprecated`, `dedupe`, `tfo`, `udp`, `scv`, `tls13`, `insert`, `classical`, … | underscore/hyphen, case-insensitive                   | —                 | Every flag parsed by `parseRequestSettings`                           |

@@ -12,6 +12,8 @@ import {
   filterNodes,
   groupGenerate,
   matchRange,
+  nodeNameRegex,
+  nodeNameRemove,
   parseSubscription,
   preprocessNodes,
   processRemark,
@@ -163,6 +165,35 @@ describe("preprocessNodes", () => {
     });
     expect(nodes.map((n) => n.remark)).toEqual(["Alpha", "Renamed"]);
   });
+
+  it("applies name regex and removals before rename and country prefix", () => {
+    const nodes = [ssNode("abc@server1.xxx.yyy"), ssNode("foo.server2.bar")];
+    preprocessNodes(nodes, {
+      addEmoji: false,
+      autoCountry: true,
+      countryResolver: () => "US",
+      emojiArray: [],
+      nameRegexArray: [{ match: "^abc@(.+?)\\..*$", replace: "$1", script: "" }],
+      nameRemove: ["foo", "bar"],
+      removeEmoji: false,
+      renameArray: [{ match: "^server", replace: "node", script: "" }],
+      sortFlag: false,
+    });
+    expect(nodes.map((n) => n.remark)).toEqual(["美国-node1", "美国-node2"]);
+  });
+
+  it("keeps the original name when a regex matches everything", () => {
+    const nodes = [ssNode("server1")];
+    preprocessNodes(nodes, {
+      addEmoji: false,
+      emojiArray: [],
+      nameRegexArray: [{ match: ".*", replace: "", script: "" }],
+      removeEmoji: false,
+      renameArray: [],
+      sortFlag: false,
+    });
+    expect(nodes[0]?.remark).toBe("server1");
+  });
 });
 
 describe("groupGenerate", () => {
@@ -193,6 +224,53 @@ describe("filterNodes", () => {
     const nodes = [ssNode("HK"), ssNode("US")];
     filterNodes(nodes, [], ["HK"], 0);
     expect(nodes.map((n) => n.remark)).toEqual(["HK"]);
+  });
+});
+
+describe("node name regex and removal", () => {
+  it("extracts a server name with a regex replacement", () => {
+    const node = ssNode("abc@server1.xxx.yyy");
+    nodeNameRegex(node, [{ match: "^abc@([^.]+)\\..*$", replace: "$1", script: "" }]);
+    expect(node.remark).toBe("server1");
+  });
+
+  it("applies several regex rules in order", () => {
+    const node = ssNode("abc@server1.xxx.yyy");
+    nodeNameRegex(node, [
+      { match: "^abc@", replace: "", script: "" },
+      { match: "\\.xxx\\.yyy$", replace: "", script: "" },
+    ]);
+    expect(node.remark).toBe("server1");
+  });
+
+  it("ignores malformed patterns, scripts and matches-all rewrites", () => {
+    const node = ssNode("server1");
+    nodeNameRegex(node, [
+      { match: "(", replace: "x", script: "" },
+      { match: "", replace: "x", script: "" },
+      { match: "server", replace: "node", script: "s" },
+    ]);
+    expect(node.remark).toBe("server1");
+  });
+
+  it("strips literal fragments and their separators", () => {
+    const node = ssNode("foo.server1.bar");
+    nodeNameRemove(node, ["foo", "bar"]);
+    expect(node.remark).toBe("server1");
+  });
+
+  it("strips multiple fragments across repeated calls", () => {
+    const node = ssNode("US-foo-server1-foo");
+    nodeNameRemove(node, ["foo", ""]);
+    expect(node.remark).toBe("US-server1");
+  });
+
+  it("keeps the original name when everything is removed", () => {
+    const node = ssNode("foo");
+    nodeNameRemove(node, ["foo"]);
+    expect(node.remark).toBe("foo");
+    nodeNameRemove(node, ["missing"]);
+    expect(node.remark).toBe("foo");
   });
 });
 

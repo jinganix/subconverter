@@ -119,6 +119,8 @@ export function createRequestSettings(): RequestSettings {
     interval: 0,
     list: false,
     mixin: "",
+    nameRegex: [],
+    nameRemove: [],
     newFieldName: true,
     nodeList: false,
     proxiesStyle: "flow",
@@ -189,6 +191,17 @@ export function parseRequestSettings(query: string): RequestSettings {
   if (renameRaw !== "") {
     settings.rename = [parseRegexMatch(renameRaw, "@")];
   }
+  // `name_regex` accepts the same `match@replacement` form as `rename` and may
+  // be repeated; `name_remove` takes a comma-separated list of literals.
+  settings.nameRegex = getAllUrlArgs(query, "name_regex")
+    .flatMap((raw) => raw.split("\n"))
+    .map((raw) => raw.trim())
+    .filter((raw) => raw !== "")
+    .map((raw) => parseRegexMatch(raw, "@"));
+  settings.nameRemove = getAllUrlArgs(query, "name_remove")
+    .flatMap((raw) => raw.split(","))
+    .map((raw) => raw.trim())
+    .filter((raw) => raw !== "");
   const emojiRaw = getUrlArg(query, "emoji");
   if (emojiRaw !== "") {
     settings.emoji = [parseRegexMatch(emojiRaw, ",")];

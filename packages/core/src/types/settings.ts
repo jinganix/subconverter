@@ -38,6 +38,10 @@ export interface ExtraSettings {
   overwriteOriginalRules: boolean;
   renameArray: RegexMatchConfig[];
   emojiArray: RegexMatchConfig[];
+  /** Regex rewrites applied to node names before every other naming rule. */
+  nameRegexArray: RegexMatchConfig[];
+  /** Literal fragments stripped from node names before every other naming rule. */
+  nameRemove: string[];
   addEmoji: boolean;
   removeEmoji: boolean;
   /** Prefix node names with the server's country/region when the name lacks one. */
@@ -89,6 +93,8 @@ export function createExtraSettings(): ExtraSettings {
     enableRuleGenerator: true,
     filterDeprecated: false,
     managedConfigPrefix: "",
+    nameRegexArray: [],
+    nameRemove: [],
     nodeList: false,
     overwriteOriginalRules: true,
     quanxDevId: "",
@@ -112,6 +118,10 @@ export interface RequestSettings {
   ruleset: RulesetConfig[];
   rename: RegexMatchConfig[];
   emoji: RegexMatchConfig[];
+  /** Regex replacements applied to node names before renaming. */
+  nameRegex: RegexMatchConfig[];
+  /** Literal fragments removed from node names before renaming. */
+  nameRemove: string[];
   includeRemarks: string[];
   excludeRemarks: string[];
   addEmoji: boolean;

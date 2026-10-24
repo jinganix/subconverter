@@ -11,6 +11,8 @@ export interface ExternalConfig {
   rulesets: RulesetConfig[];
   rename: RegexMatchConfig[];
   emoji: RegexMatchConfig[];
+  nameRegex: RegexMatchConfig[];
+  nameRemove: string[];
   includeRemarks: string[];
   excludeRemarks: string[];
   addEmoji: boolean;
@@ -145,6 +147,8 @@ export function parseExternalConfig(content: string): ExternalConfig {
     excludeRemarks: [],
     groups: [],
     includeRemarks: [],
+    nameRegex: [],
+    nameRemove: [],
     overwriteOriginalRules: true,
     removeEmoji: false,
     rename: [],
@@ -190,6 +194,17 @@ export function parseExternalConfig(content: string): ExternalConfig {
         case "rename":
         case "rename_node":
           result.rename.push(parseRegexMatch(value, "@"));
+          break;
+        case "name_regex":
+          result.nameRegex.push(parseRegexMatch(value, "@"));
+          break;
+        case "name_remove":
+          for (const fragment of value.split(",")) {
+            const trimmed = fragment.trim();
+            if (trimmed !== "") {
+              result.nameRemove.push(trimmed);
+            }
+          }
           break;
         case "emoji":
         case "emojis":

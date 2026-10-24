@@ -46,6 +46,13 @@ function parseRenameRules(values: string[]): ExtraSettings["renameArray"] {
   });
 }
 
+function parseNameRemove(values: string[]): string[] {
+  return values
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter((value) => value !== "");
+}
+
 interface ArgState {
   flags: Map<string, string[]>;
   positionals: string[];
@@ -218,6 +225,8 @@ Convert options:
   -o, --out <path>      Write output to a file (default: stdout)
   -g, --group <name>    Add a select group containing all nodes
   -r, --rename <m@r>    Rename rule: match-regex@replacement
+      --name-regex <m@r>    Regex replace applied to names before rename rules (repeatable; $1 backrefs)
+      --name-remove <list>  Comma-separated literal fragments removed from names (repeatable)
   -e, --emoji <m@r>     Emoji rule: match-regex@emoji
       --add-emoji       Prepend emoji using the emoji rules
       --remove-emoji    Strip leading emoji from names
@@ -383,6 +392,14 @@ async function runConvert(state: ArgState): Promise<number> {
     dedupe: flagBool(state, "dedupe"),
     emojiArray: parseEmojiRules(flagAll(state, "emoji")),
     filterDeprecated: flagBool(state, "filter-deprecated"),
+    nameRegexArray: parseRenameRules([
+      ...flagAll(state, "name-regex"),
+      ...flagAll(state, "name_regex"),
+    ]),
+    nameRemove: parseNameRemove([
+      ...flagAll(state, "name-remove"),
+      ...flagAll(state, "name_remove"),
+    ]),
     nodeList: flagBool(state, "node-list"),
     removeEmoji: flagBool(state, "remove-emoji"),
     renameArray: parseRenameRules(flagAll(state, "rename")),
@@ -413,6 +430,12 @@ async function runConvert(state: ArgState): Promise<number> {
     }
     if (external.emoji.length > 0) {
       settings.emojiArray = [...(settings.emojiArray ?? []), ...external.emoji];
+    }
+    if (external.nameRegex.length > 0) {
+      settings.nameRegexArray = [...(settings.nameRegexArray ?? []), ...external.nameRegex];
+    }
+    if (external.nameRemove.length > 0) {
+      settings.nameRemove = [...(settings.nameRemove ?? []), ...external.nameRemove];
     }
     settings.enableRuleGenerator = external.enableRuleGenerator;
     settings.overwriteOriginalRules = external.overwriteOriginalRules;

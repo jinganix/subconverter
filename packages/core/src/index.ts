@@ -200,6 +200,8 @@ export {
   filterNodes,
   groupGenerate,
   matchRange,
+  nodeNameRegex,
+  nodeNameRemove,
   nodeRename,
   preprocessNodes,
   processRemark,
