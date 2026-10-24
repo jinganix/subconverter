@@ -23,12 +23,12 @@
 这是一个 npm workspaces monorepo，依赖方向严格受限
 （`core` ← `node`/`browser` ← `cli`）：
 
-| 包                 | 用途                                                   |
-| ------------------ | ------------------------------------------------------ |
-| `packages/core`    | 与平台无关的转换引擎：解析器、生成器、节点操作。       |
-| `packages/node`    | Node 适配层：文件系统 + `fetch` 订阅加载、HTTP 服务。  |
-| `packages/browser` | 浏览器构建产物（ESM + IIFE 全局变量 `SubConverter`）。 |
-| `packages/cli`     | `subconverter` 命令行工具。                            |
+| 包                 | 用途                                                              |
+| ------------------ | ----------------------------------------------------------------- |
+| `packages/core`    | 与平台无关的转换引擎：解析器、生成器、节点操作。                  |
+| `packages/node`    | Node 适配层：文件系统 + `fetch` 加载、GeoIP 地区查询、HTTP 服务。 |
+| `packages/browser` | 浏览器构建产物（ESM + IIFE 全局变量 `SubConverter`）。            |
+| `packages/cli`     | `subconverter` 命令行工具。                                       |
 
 引擎从不导入 Node 内置模块或 DOM 全局对象，因此同一份代码可同时支撑以上三个运行目标。
 
@@ -172,12 +172,34 @@ subconverter serve --port 25500 --host 0.0.0.0
 `--new-field-name=false` 切回旧版 `Proxy`）、`--legacy`（旧版 Clash 字段名）、
 `--with-rules`（默认开启，兼容保留）/ `--no-rules`（去掉规则与默认分组）。
 
+### 按 IP 自动加国家/地区前缀
+
+名字里没有国家/地区信息时，按服务器 IP 查询本地 MaxMind 数据库
+（GeoLite2/GeoIP2 Country 或 City `.mmdb`），把国家/地区加到名字最前面：
+
+```bash
+subconverter convert --file sub.txt --target clash \
+  --auto-country --geoip ./GeoLite2-Country.mmdb
+# server1 -> 美国-server1
+```
+
+`--country-locale` 指定 `Intl.DisplayNames` 的区域语言（默认 `zh-CN`，`en` 会得到
+`United States-server1`）。已经包含国家/地区的名字（`香港-01`、`US01`、`🇭🇰 HK`、
+`Hong Kong 01`）保持不变；域名服务器会先做一次 DNS 解析（同一主机名只查一次）。
+数据库需自行从 MaxMind 下载（GeoLite2 需免费账号）或使用兼容镜像，仓库不内置。
+`data/` 已被 git 忽略，适合放本地副本：
+
+```bash
+mkdir -p data && curl -fL -o data/GeoLite2-Country.mmdb \
+  https://raw.githubusercontent.com/P3TERX/GeoLite.mmdb/download/GeoLite2-Country.mmdb
+```
+
 ## 服务端（Docker）
 
 ```bash
 docker build -t subconverter-ts .
 docker run -p 25500:25500 subconverter-ts
-# 或
+# 或（挂载 GeoIP 数据库，启用国家/地区前缀）
 docker compose up --build
 ```
 
@@ -185,6 +207,14 @@ docker compose up --build
 
 ```text
 GET http://127.0.0.1:25500/sub?target=clash&url=https://example.com/sub
+```
+
+服务端用 `--geoip` 启动即启用国家/地区前缀（挂载数据库即可，单个请求可用
+`auto_country=false` 关闭）；数据库路径只从命令行读取，不接受 query 参数：
+
+```bash
+subconverter serve --geoip /data/GeoLite2-Country.mmdb
+# GET /sub?target=clash&url=...
 ```
 
 另有 `GET /`（用法说明）与 `GET /version`。仅支持 `GET`/`HEAD`，已启用 CORS。
@@ -196,22 +226,23 @@ URL（拒绝本地路径）；`[]RULE` 内联规则集不受影响。
 
 ### 查询参数
 
-| 参数                                                                                                                                                                             | 别名                                                  | 默认值   | 说明                                                         |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | -------- | ------------------------------------------------------------ |
-| `target`                                                                                                                                                                         | —                                                     | `clash`  | 输出格式（见输出表；`auto` 非法）                            |
-| `url`                                                                                                                                                                            | —                                                     | —        | 订阅 URL，可重复，多个可用 `\|` 分隔                         |
-| `config`                                                                                                                                                                         | —                                                     | —        | 远端 `http(s)` 外部 INI（`[]` 忽略；本地路径拒绝）           |
-| `ruleset`                                                                                                                                                                        | `rulesets`                                            | —        | `group,url[,interval]` 或 `group,[]RULE`，可重复，`\|` 分隔  |
-| `group`                                                                                                                                                                          | —                                                     | —        | 额外 select 分组名（可重复）                                 |
-| `interval`                                                                                                                                                                       | —                                                     | 上游值   | 覆盖 `profile-update-interval` 响应头                        |
-| `surge_version`                                                                                                                                                                  | `surge-version`、`ver`、`version`                     | `5`      | Surge 目标版本                                               |
-| `new_field_name`                                                                                                                                                                 | `new_name`、连字符变体                                | `true`   | Clash 新字段名；裸 `?flag` 视为 `true`                       |
-| `legacy`                                                                                                                                                                         | `legacy_field_name`、`legacy-field-name`              | `false`  | 旧版 `Proxy`/`Proxy Group`/`Rule`（优先于 `new_field_name`） |
-| `with_rules`                                                                                                                                                                     | `with-rules`                                          | `true`   | 附加规则 + 默认分组（兼容保留）                              |
-| `no_rules`                                                                                                                                                                       | `no-rules`                                            | `false`  | 去掉规则与默认分组                                           |
-| `userinfo_url`                                                                                                                                                                   | `userinfo-url`、`userinfo`                            | —        | 额外流量接口（见下）                                         |
-| `userinfo_provider`                                                                                                                                                              | `userinfo-provider`、`userinfo_type`、`userinfo-type` | 自动识别 | 流量转换器（见下）                                           |
-| `rename`、`emoji`、`include`、`exclude`、`add_emoji`、`remove_emoji`、`append_type`、`sort`、`filter_deprecated`、`dedupe`、`tfo`、`udp`、`scv`、`tls13`、`insert`、`classical`… | 下划线/连字符、大小写不敏感                           | —        | `parseRequestSettings` 解析的全部开关                        |
+| 参数                                                                                                                                                                             | 别名                                                  | 默认值                | 说明                                                         |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------- | ------------------------------------------------------------ |
+| `target`                                                                                                                                                                         | —                                                     | `clash`               | 输出格式（见输出表；`auto` 非法）                            |
+| `url`                                                                                                                                                                            | —                                                     | —                     | 订阅 URL，可重复，多个可用 `\|` 分隔                         |
+| `config`                                                                                                                                                                         | —                                                     | —                     | 远端 `http(s)` 外部 INI（`[]` 忽略；本地路径拒绝）           |
+| `ruleset`                                                                                                                                                                        | `rulesets`                                            | —                     | `group,url[,interval]` 或 `group,[]RULE`，可重复，`\|` 分隔  |
+| `group`                                                                                                                                                                          | —                                                     | —                     | 额外 select 分组名（可重复）                                 |
+| `interval`                                                                                                                                                                       | —                                                     | 上游值                | 覆盖 `profile-update-interval` 响应头                        |
+| `surge_version`                                                                                                                                                                  | `surge-version`、`ver`、`version`                     | `5`                   | Surge 目标版本                                               |
+| `new_field_name`                                                                                                                                                                 | `new_name`、连字符变体                                | `true`                | Clash 新字段名；裸 `?flag` 视为 `true`                       |
+| `legacy`                                                                                                                                                                         | `legacy_field_name`、`legacy-field-name`              | `false`               | 旧版 `Proxy`/`Proxy Group`/`Rule`（优先于 `new_field_name`） |
+| `with_rules`                                                                                                                                                                     | `with-rules`                                          | `true`                | 附加规则 + 默认分组（兼容保留）                              |
+| `no_rules`                                                                                                                                                                       | `no-rules`                                            | `false`               | 去掉规则与默认分组                                           |
+| `auto_country`                                                                                                                                                                   | `auto-country`                                        | 配置 `--geoip` 时开启 | 给缺少国家/地区的名字加 GeoIP 前缀                           |
+| `userinfo_url`                                                                                                                                                                   | `userinfo-url`、`userinfo`                            | —                     | 额外流量接口（见下）                                         |
+| `userinfo_provider`                                                                                                                                                              | `userinfo-provider`、`userinfo_type`、`userinfo-type` | 自动识别              | 流量转换器（见下）                                           |
+| `rename`、`emoji`、`include`、`exclude`、`add_emoji`、`remove_emoji`、`append_type`、`sort`、`filter_deprecated`、`dedupe`、`tfo`、`udp`、`scv`、`tls13`、`insert`、`classical`… | 下划线/连字符、大小写不敏感                           | —                     | `parseRequestSettings` 解析的全部开关                        |
 
 ### 流量信息（`userinfo_url`）
 

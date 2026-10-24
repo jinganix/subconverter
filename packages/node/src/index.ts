@@ -16,6 +16,8 @@ import {
 } from "@subconverter/core";
 import { readFile, writeFile } from "node:fs/promises";
 
+import { countryResolverFrom, getGeoIpDatabase, resolveNodeCountries } from "./geoip";
+
 /** Options for {@link loadSubscription}. */
 export interface LoadOptions {
   /** Optional request headers (e.g. `User-Agent`, `Authorization`). */
@@ -139,6 +141,11 @@ export interface ConvertRequest {
   extraProxyGroup?: ProxyGroupConfig[];
   rulesets?: RulesetConfig[];
   settings?: Partial<ExtraSettings>;
+  /**
+   * Local MaxMind `.mmdb` database (GeoLite2/GeoIP2 Country or City) used to
+   * prefix node names with their country when `settings.autoCountry` is on.
+   */
+  geoipPath?: string;
   /**
    * When `false`, rules are stripped. Defaults to `true`: with no explicit
    * `rulesets`/`extraProxyGroup`, fall back to the bundled upstream-like
@@ -310,15 +317,49 @@ export async function prepareConversion(request: ConvertRequest): Promise<Conver
     // back to the bundled offline rules when fetching fails (e.g. offline CI).
     rulesets = await getCachedDefaultRulesets();
   }
+  const nodes = await collectNodes(request.sources);
+  const settings: ExtraSettings = { ...createExtraSettings(), ...request.settings };
+  if (settings.autoCountry && settings.countryResolver === undefined) {
+    if (request.geoipPath === undefined) {
+      throw new Error(
+        "autoCountry requires a GeoIP database: pass `geoipPath` (a GeoLite2/GeoIP2 .mmdb file).",
+      );
+    }
+    settings.countryResolver = await buildCountryResolver(nodes, request.geoipPath);
+  }
   return {
     extraProxyGroup,
     includeRules,
-    nodes: await collectNodes(request.sources),
+    nodes,
     rulesets,
-    settings: { ...createExtraSettings(), ...request.settings },
+    settings,
     target: request.target,
   };
 }
+
+/**
+ * GeoIP-resolve every node's country and return a synchronous resolver for
+ * core preprocessing. A missing database is an error: silently dropping the
+ * prefix would be confusing, so callers surface it.
+ */
+export async function buildCountryResolver(
+  nodes: Proxy[],
+  geoipPath: string,
+): Promise<(node: Proxy) => string | undefined> {
+  const database = await getGeoIpDatabase(geoipPath);
+  return countryResolverFrom(await resolveNodeCountries(nodes, database));
+}
+
+export {
+  clearGeoIpCache,
+  countryResolverFrom,
+  getGeoIpDatabase,
+  isHostIp,
+  openGeoIpDatabase,
+  resolveNodeCountries,
+  type GeoIpDatabase,
+  type ResolveCountryOptions,
+} from "./geoip";
 
 export {
   collectRequestUrls,

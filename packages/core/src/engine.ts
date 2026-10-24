@@ -43,6 +43,9 @@ const V2RAY_TYPE_MASK = 1 | 2 | 4 | 8;
 export function runPreprocess(nodes: Proxy[], settings: ExtraSettings): void {
   preprocessNodes(nodes, {
     addEmoji: settings.addEmoji,
+    autoCountry: settings.autoCountry,
+    countryLocale: settings.countryLocale,
+    countryResolver: settings.countryResolver,
     emojiArray: settings.emojiArray,
     removeEmoji: settings.removeEmoji,
     renameArray: settings.renameArray,

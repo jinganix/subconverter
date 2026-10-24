@@ -15,6 +15,7 @@ import {
   resolveNewFieldName,
 } from "@subconverter/core";
 import {
+  buildCountryResolver,
   collectRulesets,
   fetchSubscription,
   startServer,
@@ -52,6 +53,7 @@ interface ArgState {
 
 const BOOLEAN_FLAGS = new Set([
   "add-emoji",
+  "auto-country",
   "remove-emoji",
   "append-type",
   "node-list",
@@ -219,6 +221,9 @@ Convert options:
   -e, --emoji <m@r>     Emoji rule: match-regex@emoji
       --add-emoji       Prepend emoji using the emoji rules
       --remove-emoji    Strip leading emoji from names
+      --auto-country    Prefix names lacking a country with the server's country
+      --geoip <mmdb>    GeoLite2/GeoIP2 database (required by --auto-country)
+      --country-locale <l>  Locale for country names (default zh-CN)
       --append-type     Prefix node names with their proxy type
       --node-list       Emit a bare node list (no groups/wrapper)
       --sort            Sort nodes by name
@@ -235,6 +240,7 @@ Convert options:
 Serve options:
   -p, --port <n>      HTTP port for serve (default 25500, env PORT)
   -H, --host <addr>   Bind address for serve (default 0.0.0.0, env HOST)
+      --geoip <mmdb>    GeoLite2/GeoIP2 database enabling auto_country
                       Example: /sub?target=clash&url=<sub-url>
                                &userinfo_url=<quota-url>&userinfo_provider=jms
   -h, --help            Show this help
@@ -283,7 +289,12 @@ async function runServe(state: ArgState): Promise<number> {
     return 1;
   }
   try {
-    const server = await startServer({ host, port });
+    const geoipPath = flag(state, "geoip");
+    const server = await startServer({
+      geoipPath: geoipPath && geoipPath !== "true" ? geoipPath : undefined,
+      host,
+      port,
+    });
     const shutdown = (): void => {
       server.close(() => {
         process.exit(0);
@@ -362,7 +373,13 @@ async function runConvert(state: ArgState): Promise<number> {
   const settings: Partial<ExtraSettings> = {
     addEmoji: flagBool(state, "add-emoji"),
     appendProxyType: flagBool(state, "append-type"),
+    // Supplying `--geoip` turns the country prefix on; `--auto-country=false`
+    // still wins when it is passed explicitly.
+    autoCountry: state.flags.has("auto-country")
+      ? flagBool(state, "auto-country")
+      : flag(state, "geoip") !== undefined,
     clashNewFieldName: resolveClashNewFieldName(state),
+    countryLocale: flag(state, "country-locale") ?? "zh-CN",
     dedupe: flagBool(state, "dedupe"),
     emojiArray: parseEmojiRules(flagAll(state, "emoji")),
     filterDeprecated: flagBool(state, "filter-deprecated"),
@@ -402,6 +419,9 @@ async function runConvert(state: ArgState): Promise<number> {
     if (external.addEmoji) {
       settings.addEmoji = true;
     }
+    if (external.autoCountry) {
+      settings.autoCountry = true;
+    }
     if (external.removeEmoji) {
       settings.removeEmoji = true;
     }
@@ -433,6 +453,24 @@ async function runConvert(state: ArgState): Promise<number> {
 
   const surgeRaw = flag(state, "surge-version") ?? "5";
   const surgeVersion = Number.parseInt(surgeRaw.trim(), 10) || 5;
+
+  if (settings.autoCountry) {
+    const geoipPath = flag(state, "geoip");
+    if (geoipPath === undefined || geoipPath === "" || geoipPath === "true") {
+      process.stderr.write("--auto-country requires --geoip <path to GeoLite2/GeoIP2 .mmdb>.\n");
+      return 1;
+    }
+    try {
+      settings.countryResolver = await buildCountryResolver(nodes, geoipPath);
+    } catch (error) {
+      process.stderr.write(
+        `Failed to load GeoIP database ${geoipPath}: ${
+          error instanceof Error ? error.message : String(error)
+        }\n`,
+      );
+      return 1;
+    }
+  }
 
   const output = generate(nodes, {
     baseConf,

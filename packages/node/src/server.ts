@@ -24,6 +24,7 @@ import { lookup as dnsLookup } from "node:dns/promises";
 import { createServer as createHttpServer, type Server, type ServerResponse } from "node:http";
 
 import {
+  buildCountryResolver,
   detectRulesetType,
   getCachedDefaultRulesets,
   MAX_FETCH_BYTES,
@@ -37,6 +38,16 @@ export interface ServeOptions {
   host?: string;
   /** TCP port to listen on (default `25500`). */
   port?: number;
+  /**
+   * Local MaxMind `.mmdb` database enabling `auto_country` (GeoIP country
+   * prefixed names). Local paths are only accepted here, never from a query.
+   */
+  geoipPath?: string;
+}
+
+/** Options shared by the server conversion helpers. */
+export interface SubServerOptions {
+  geoipPath?: string;
 }
 
 /** Result of converting one `/sub` HTTP request. */
@@ -510,6 +521,7 @@ function toExtraSettings(request: RequestSettings, rawQuery: string): ExtraSetti
     ...base,
     addEmoji: request.addEmoji,
     appendProxyType: request.appendType,
+    autoCountry: request.autoCountry,
     clashClassicalRuleset: request.classicalRuleset,
     clashNewFieldName: request.newFieldName,
     clashProxiesStyle: request.proxiesStyle || "flow",
@@ -608,6 +620,7 @@ async function buildRulesets(
 export async function convertSubRequest(
   rawQuery: string,
   _searchParams: URLSearchParams,
+  options: SubServerOptions = {},
 ): Promise<SubConversion> {
   // `rawQuery` is the single source of truth for every param (core
   // `parseRequestSettings` plus the `raw*` helpers below share `getUrlArg`
@@ -728,6 +741,9 @@ export async function convertSubRequest(
         if (external.removeEmoji) {
           request.removeEmoji = true;
         }
+        if (external.autoCountry) {
+          request.autoCountry = true;
+        }
       }
     } catch (error) {
       failures.push(`config: ${error instanceof Error ? error.message : String(error)}`);
@@ -746,6 +762,14 @@ export async function convertSubRequest(
   // `toExtraSettings` already carries the merged `request.rename`/`emoji`
   // (including external-config entries pushed above); do not append again.
   const settings = toExtraSettings(request, rawQuery);
+  // A configured database turns country prefixes on by default, so mounting a
+  // `.mmdb` is enough to get `美国-server1`; `auto_country=false` opts out.
+  const autoCountryFlag = queryBoolFlag(rawQuery, "auto_country", "auto-country");
+  if (autoCountryFlag !== undefined) {
+    settings.autoCountry = autoCountryFlag;
+  } else if (options.geoipPath !== undefined) {
+    settings.autoCountry = true;
+  }
 
   const surgeVersionRaw = rawFirst(rawQuery, "surge_version", "surge-version", "ver", "version");
   const surgeVersion = surgeVersionRaw === "" ? 5 : Number.parseInt(surgeVersionRaw, 10) || 5;
@@ -767,6 +791,29 @@ export async function convertSubRequest(
   let resolvedGroups = groups;
   if (includeRules !== false && resolvedGroups.length === 0) {
     resolvedGroups = getDefaultProxyGroups();
+  }
+
+  if (settings.autoCountry) {
+    if (options.geoipPath === undefined) {
+      throw Object.assign(
+        new Error(
+          "auto_country requires a GeoIP database: start the server with --geoip <mmdb path>.",
+        ),
+        { statusCode: 400 },
+      );
+    }
+    try {
+      settings.countryResolver = await buildCountryResolver(nodes, options.geoipPath);
+    } catch (error) {
+      throw Object.assign(
+        new Error(
+          `Failed to load GeoIP database ${options.geoipPath}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        ),
+        { statusCode: 500 },
+      );
+    }
   }
 
   const body = generate(nodes, {
@@ -817,13 +864,18 @@ export async function convertSubRequest(
 }
 
 /** Create (but do not start) the subconverter HTTP server. */
-export function createSubServer(): Server {
+export function createSubServer(options: SubServerOptions = {}): Server {
   return createHttpServer((req, res) => {
-    void handleSubRequest(req.url ?? "/", req.method ?? "GET", res);
+    void handleSubRequest(req.url ?? "/", req.method ?? "GET", res, options);
   });
 }
 
-async function handleSubRequest(url: string, method: string, res: ServerResponse): Promise<void> {
+async function handleSubRequest(
+  url: string,
+  method: string,
+  res: ServerResponse,
+  options: SubServerOptions,
+): Promise<void> {
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -854,7 +906,7 @@ async function handleSubRequest(url: string, method: string, res: ServerResponse
   }
   const rawQuery = url.includes("?") ? url.slice(url.indexOf("?") + 1) : "";
   try {
-    const result = await convertSubRequest(rawQuery, parsed.searchParams);
+    const result = await convertSubRequest(rawQuery, parsed.searchParams, options);
     res.setHeader("Content-Type", result.contentType);
     res.setHeader("Content-Disposition", `attachment; filename="${result.filename}"`);
     if (result.userinfo) {
@@ -879,7 +931,7 @@ async function handleSubRequest(url: string, method: string, res: ServerResponse
 export async function startServer(options: ServeOptions = {}): Promise<Server> {
   const port = options.port ?? 25500;
   const host = options.host ?? "0.0.0.0";
-  const server = createSubServer();
+  const server = createSubServer({ geoipPath: options.geoipPath });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, host, () => {

@@ -36,7 +36,8 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@subconverter/core": "0.2.0"
+    "@subconverter/core": "0.2.0",
+    "maxmind": "^5.0.7"
   },
   "devDependencies": {
     "tsup": "^8.5.0",
