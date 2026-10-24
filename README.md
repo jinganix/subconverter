@@ -12,7 +12,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-Current release: **v0.2.0** — see [CHANGELOG.md](CHANGELOG.md).
+Current release: **v0.2.1** — see [CHANGELOG.md](CHANGELOG.md).
 
 A TypeScript rewrite of [tindy2013/subconverter](https://github.com/tindy2013/subconverter):
 an isomorphic subscription converter that runs on **Node.js**, in the **browser**, and as a

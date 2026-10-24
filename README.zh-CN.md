@@ -12,7 +12,7 @@
 
 [English](README.md) | 简体中文
 
-当前版本：**v0.2.0** —— 变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本：**v0.2.1** —— 变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 [tindy2013/subconverter](https://github.com/tindy2013/subconverter) 的 TypeScript 重写版本：
 一个同构的订阅转换器，可运行于 **Node.js**、**浏览器** 以及 **CLI**。
