@@ -47,6 +47,8 @@ export function runPreprocess(nodes: Proxy[], settings: ExtraSettings): void {
     countryLocale: settings.countryLocale,
     countryResolver: settings.countryResolver,
     emojiArray: settings.emojiArray,
+    nameRegexArray: settings.nameRegexArray,
+    nameRemove: settings.nameRemove,
     removeEmoji: settings.removeEmoji,
     renameArray: settings.renameArray,
     sortFlag: settings.sortFlag,

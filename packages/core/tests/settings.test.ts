@@ -102,6 +102,8 @@ describe("parseExternalConfig", () => {
         "ruleset=G,https://example.com/list,3600",
         "custom_proxy_group=🚀 节点选择`select`[]DIRECT`.*",
         "rename=(.*)@\\1",
+        "name_regex=^abc@(.+)\\..*$@$1",
+        "name_remove=foo,bar",
         "emoji=香港,🇭🇰",
         "include_remarks=HK",
         "exclude_remarks=广告",
@@ -116,6 +118,8 @@ describe("parseExternalConfig", () => {
     expect(config.groups).toHaveLength(1);
     expect(config.groups[0]?.name).toBe("🚀 节点选择");
     expect(config.rename[0]?.match).toBe("(.*)");
+    expect(config.nameRegex[0]?.replace).toBe("$1");
+    expect(config.nameRemove).toEqual(["foo", "bar"]);
     expect(config.emoji[0]?.replace).toBe("🇭🇰");
     expect(config.includeRemarks).toEqual(["HK"]);
     expect(config.excludeRemarks).toEqual(["广告"]);
@@ -145,6 +149,16 @@ describe("parseRequestSettings", () => {
     expect(settings.rename[0]).toEqual({ match: "a", replace: "b", script: "" });
     expect(settings.emoji[0]).toEqual({ match: "hk", replace: "🇭🇰", script: "" });
     expect(settings.includeRemarks).toEqual(["HK", "US"]);
+  });
+
+  it("parses repeatable name_regex and comma-separated name_remove", () => {
+    const raw =
+      "target=clash&name_regex=^abc%40(.%2B)%40%241" +
+      "&name_regex=yyy%40z&name_remove=foo,bar&name_remove=baz";
+    const settings = parseRequestSettings(raw);
+    expect(settings.nameRegex.map((rule) => rule.match)).toEqual(["^abc@(.+)", "yyy"]);
+    expect(settings.nameRegex[0]?.replace).toBe("$1");
+    expect(settings.nameRemove).toEqual(["foo", "bar", "baz"]);
   });
 
   it("defaults unknown targets to auto", () => {

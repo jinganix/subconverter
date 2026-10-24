@@ -123,8 +123,8 @@ Clash YAML → Surge INI → base64/明文链接列表）。
   Surge/QuanX/Quan/Surfboard/Loon 规则或 sing-box `route` 片段。
 - 代理组编译，支持所有 subconverter 匹配器与分组类型（select、url-test、
   fallback、load-balance、relay、ssid、smart）。
-- 外部配置解析（`[custom]` INI：`ruleset`、`custom_proxy_group`、`rename`、`emoji`、
-  备注包含/排除、基础文件）以及请求查询字符串解析。
+- 外部配置解析（`[custom]` INI：`ruleset`、`custom_proxy_group`、`rename`、`name_regex`、
+  `name_remove`、`emoji`、备注包含/排除、基础文件）以及请求查询字符串解析。
 - 由 `[template]` 变量驱动的轻量模板插值（`{{ var }}`）。
 - 规则默认开启：未传 `rulesets`/`groups` 时回退到上游风格的远端默认规则
   （`@subconverter/node` 带 TTL 缓存 + 单飞请求，离线时回退内置静态规则）。传
@@ -171,6 +171,24 @@ subconverter serve --port 25500 --host 0.0.0.0
 转换参数：`--surge-version`（默认 **5**）、`--new-field-name`（默认 **true**，
 `--new-field-name=false` 切回旧版 `Proxy`）、`--legacy`（旧版 Clash 字段名）、
 `--with-rules`（默认开启，兼容保留）/ `--no-rules`（去掉规则与默认分组）。
+
+### 重命名前的名字清理
+
+`--name-regex <匹配@替换>` 用 JS 正则改写节点名（支持 `$1` 反向引用、替换全部匹配、可重复），
+`--name-remove <a,b>` 按字面量删除片段（可重复、逗号分隔）。两者都在 `--rename`、emoji、
+`--auto-country` 和排序**之前**执行，后续规则看到的是清理后的名字：
+
+```bash
+# abc@server1.xxx.yyy -> server1 -> 美国-server1
+subconverter convert --file sub.txt --target clash \
+  --name-regex '^abc@([^.]+)\..*$@$1' --auto-country --geoip ./GeoLite2-Country.mmdb
+
+# foo.server1.bar -> server1（删除后残留的分隔符会被合并）
+subconverter convert --file sub.txt --target clash --name-remove 'foo,bar'
+```
+
+结果为空时保留原名，非法正则会被忽略。外部 INI 配置中对应 `name_regex=匹配@替换` 与
+`name_remove=a,b`；HTTP 请求使用 `name_regex`（可重复）与 `name_remove`（逗号分隔）。
 
 ### 按 IP 自动加国家/地区前缀
 
@@ -240,6 +258,8 @@ URL（拒绝本地路径）；`[]RULE` 内联规则集不受影响。
 | `with_rules`                                                                                                                                                                     | `with-rules`                                          | `true`                | 附加规则 + 默认分组（兼容保留）                              |
 | `no_rules`                                                                                                                                                                       | `no-rules`                                            | `false`               | 去掉规则与默认分组                                           |
 | `auto_country`                                                                                                                                                                   | `auto-country`                                        | 配置 `--geoip` 时开启 | 给缺少国家/地区的名字加 GeoIP 前缀                           |
+| `name_regex`                                                                                                                                                                     | —                                                     | —                     | 重命名前对名字做 `匹配@替换` 正则替换（可重复）              |
+| `name_remove`                                                                                                                                                                    | —                                                     | —                     | 重命名前按逗号分隔的字面量删除名字片段                       |
 | `userinfo_url`                                                                                                                                                                   | `userinfo-url`、`userinfo`                            | —                     | 额外流量接口（见下）                                         |
 | `userinfo_provider`                                                                                                                                                              | `userinfo-provider`、`userinfo_type`、`userinfo-type` | 自动识别              | 流量转换器（见下）                                           |
 | `rename`、`emoji`、`include`、`exclude`、`add_emoji`、`remove_emoji`、`append_type`、`sort`、`filter_deprecated`、`dedupe`、`tfo`、`udp`、`scv`、`tls13`、`insert`、`classical`… | 下划线/连字符、大小写不敏感                           | —                     | `parseRequestSettings` 解析的全部开关                        |

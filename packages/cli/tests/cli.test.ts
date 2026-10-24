@@ -353,3 +353,43 @@ describe("cli geoip implies auto country", () => {
     expect(stdout).not.toContain("美国-server1");
   });
 });
+
+describe("cli name regex and removal", () => {
+  it("rewrites names with --name-regex before --rename", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#abc@server1.xxx.yyy");
+    stdout = "";
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "clash",
+        "--no-rules",
+        "--name-regex",
+        "^abc@(.+?)\\..*$@$1",
+        "--rename",
+        "^server@node",
+      ]),
+    ).toBe(0);
+    expect(stdout).toContain("name: node1");
+  });
+
+  it("removes literal fragments with --name-remove", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#foo.server1.bar");
+    stdout = "";
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "clash",
+        "--no-rules",
+        "--name-remove",
+        "foo,bar",
+      ]),
+    ).toBe(0);
+    expect(stdout).toContain("name: server1");
+  });
+});

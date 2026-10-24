@@ -254,6 +254,49 @@ export function addEmoji(node: Proxy, emojiArray: RegexMatchConfig[]): string {
   return node.remark;
 }
 
+/** Replace every match of the user-supplied regex rules in a node's remark. */
+export function nodeNameRegex(node: Proxy, rules: RegexMatchConfig[]): void {
+  const original = node.remark;
+  for (const rule of rules) {
+    if (rule.script !== "" || rule.match === "") {
+      continue;
+    }
+    try {
+      node.remark = node.remark.replace(new RegExp(rule.match, "g"), rule.replace);
+    } catch {
+      // Ignore malformed patterns instead of failing the whole conversion.
+    }
+  }
+  if (node.remark === "") {
+    node.remark = original;
+  }
+}
+
+const NAME_SEPARATOR_EDGES = /^[-_.\s]+|[-_.\s]+$/g;
+const NAME_SEPARATOR_RUN = /([-_.\s])[-_.\s]+/g;
+
+/**
+ * Remove literal fragments from a node's remark (e.g. `foo.server1.bar` with
+ * `["foo", "bar"]` -> `server1`). Separators left at the edges or doubled by
+ * the removal are collapsed.
+ */
+export function nodeNameRemove(node: Proxy, removeList: string[]): void {
+  const original = node.remark;
+  let remark = node.remark;
+  let removed = false;
+  for (const fragment of removeList) {
+    if (fragment === "" || !remark.includes(fragment)) {
+      continue;
+    }
+    remark = remark.split(fragment).join("");
+    removed = true;
+  }
+  if (removed) {
+    remark = remark.replace(NAME_SEPARATOR_EDGES, "").replace(NAME_SEPARATOR_RUN, "$1");
+  }
+  node.remark = remark === "" ? original : remark;
+}
+
 /** Apply rename rules to a node's remark (script rules are ignored). */
 export function nodeRename(node: Proxy, renameArray: RegexMatchConfig[]): void {
   const original = node.remark;
@@ -300,16 +343,26 @@ export interface PreprocessOptions {
   sortFlag: boolean;
   renameArray: RegexMatchConfig[];
   emojiArray: RegexMatchConfig[];
+  /** User regex rewrites applied before every other naming rule. */
+  nameRegexArray?: RegexMatchConfig[];
+  /** Literal fragments stripped from names before every other naming rule. */
+  nameRemove?: string[];
   autoCountry?: boolean;
   countryLocale?: string;
   countryResolver?: (node: Proxy) => string | undefined;
 }
 
-/** Apply emoji removal, renaming, emoji insertion, and optional sorting. */
+/** Apply name cleanup, emoji removal, renaming, emoji insertion, and optional sorting. */
 export function preprocessNodes(nodes: Proxy[], options: PreprocessOptions): void {
   for (const node of nodes) {
     if (options.removeEmoji) {
       node.remark = removeEmoji(node.remark).trim();
+    }
+    if (options.nameRegexArray && options.nameRegexArray.length > 0) {
+      nodeNameRegex(node, options.nameRegexArray);
+    }
+    if (options.nameRemove && options.nameRemove.length > 0) {
+      nodeNameRemove(node, options.nameRemove);
     }
     nodeRename(node, options.renameArray);
     if (options.addEmoji) {

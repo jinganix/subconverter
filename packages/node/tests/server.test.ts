@@ -379,6 +379,28 @@ describe("convertSubRequest", () => {
     expect(result.body).toContain("Nodee");
     expect(result.body).not.toContain("Nodeee");
   });
+
+  it("applies name_regex and name_remove before rename", async () => {
+    stubFetch(() => new Response("trojan://pw@1.2.3.4:443#abc@server1.xxx.yyy", { status: 200 }));
+    const raw =
+      "target=clash&url=https%3A%2F%2Fexample.com%2Fsub&no_rules=true" +
+      "&name_regex=" +
+      encodeURIComponent("^abc@(.+?)\\..*$@$1") +
+      "&rename=" +
+      encodeURIComponent("^server@node");
+    const params = new URLSearchParams(raw);
+    const result = await convertSubRequest(raw, params);
+    expect(result.body).toContain("name: node1");
+    expect(result.body).not.toContain("server1");
+  });
+
+  it("strips name_remove fragments", async () => {
+    stubFetch(() => new Response("trojan://pw@1.2.3.4:443#foo.server1.bar", { status: 200 }));
+    const raw =
+      "target=clash&url=https%3A%2F%2Fexample.com%2Fsub&no_rules=true&name_remove=foo,bar";
+    const result = await convertSubRequest(raw, new URLSearchParams(raw));
+    expect(result.body).toContain("name: server1");
+  });
 });
 
 describe("startServer", () => {
