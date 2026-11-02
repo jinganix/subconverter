@@ -198,6 +198,7 @@ export {
   checkIgnore,
   dedupeNodes,
   filterNodes,
+  filterNodesByCountry,
   groupGenerate,
   matchRange,
   nodeNameRegex,
@@ -211,6 +212,5 @@ export {
   formatCountryRemark,
   hasRegionName,
   isRegionCode,
-  regionDisplayName,
-  regionFlag,
+  normalizeCountryCode,
 } from "./utils/country";

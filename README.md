@@ -211,7 +211,7 @@ comma-separated). Both run **before** `--rename`, emoji, `--auto-country`, and s
 every later rule sees the cleaned name:
 
 ```bash
-# abc@server1.xxx.yyy -> server1 -> 美国-server1
+# abc@server1.xxx.yyy -> server1 -> US-server1
 subconverter convert --file sub.txt --target clash \
   --name-regex '^abc@([^.]+)\..*$@$1' --auto-country --geoip ./GeoLite2-Country.mmdb
 
@@ -225,21 +225,21 @@ HTTP they are `name_regex` (repeatable) and `name_remove` (comma-separated).
 
 ### Country prefix from GeoIP
 
-Names that mention no country/region are prefixed with the server's country, looked up
-from a local MaxMind database (GeoLite2/GeoIP2 Country or City `.mmdb`):
+Names that mention no country/region are prefixed with the server's ISO country
+code (`CN`, `US`, …), looked up from a local MaxMind database (GeoLite2/GeoIP2
+Country or City `.mmdb`):
 
 ```bash
 subconverter convert --file sub.txt --target clash \
   --auto-country --geoip ./GeoLite2-Country.mmdb
-# server1 -> 美国-server1
+# server1 -> US-server1
 ```
 
-`--country-locale` picks the `Intl.DisplayNames` locale (default `zh-CN`; `en` yields
-`United States-server1`). Names that already carry a region (`香港-01`, `US01`,
-`🇭🇰 HK`, `Hong Kong 01`) are left untouched. Domain servers are resolved through DNS
-first, once per hostname. Download the database from MaxMind (GeoLite2 requires a free
-account) or any compatible mirror; no database is bundled. `data/` is ignored by git, so a
-local copy works well there:
+Names that already carry a region (`香港-01`, `US01`, `🇭🇰 HK`, `Hong Kong 01`)
+are left untouched, so prefixes stay stable across locales. Domain servers are
+resolved through DNS first, once per hostname. Download the database from MaxMind
+(GeoLite2 requires a free account) or any compatible mirror; no database is
+bundled. `data/` is ignored by git, so a local copy works well there:
 
 ```bash
 mkdir -p data && curl -fL -o data/GeoLite2-Country.mmdb \
@@ -297,8 +297,14 @@ Defaults are shown in parentheses; every underscore param also accepts a hyphen 
 - `with_rules` (`with-rules`; default `true`) — attach rules and default groups, kept for
   compatibility.
 - `no_rules` (`no-rules`; default `false`) — strip rules and default groups.
-- `auto_country` (`auto-country`) — prefix names lacking a country; on by default when the
-  server runs with `--geoip`.
+- `auto_country` (`auto-country`) — prefix names lacking a country with the ISO
+  code; on by default when the server runs with `--geoip`.
+- `include_country` (`include-country`; repeatable, comma-separated) — keep only
+  nodes in these ISO countries (e.g. `include_country=US,JP`); nodes with an
+  unknown country are dropped. Needs `--geoip`.
+- `exclude_country` (`exclude-country`; repeatable, comma-separated) — drop nodes
+  in these ISO countries (e.g. `exclude_country=NL`); unknown countries are kept.
+  Needs `--geoip`.
 - `name_regex` — regex replace applied to names before renaming (repeatable).
 - `name_remove` — literal fragments removed from names before renaming (comma list).
 - `userinfo_url` (aliases `userinfo-url`, `userinfo`) — extra quota endpoint (see below).

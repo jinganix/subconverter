@@ -1,7 +1,7 @@
 import type { Proxy } from "../types/proxy";
 import { ProxyType } from "../types/proxy";
 import type { RegexMatchConfig } from "../types/settings";
-import { formatCountryRemark, hasRegionName } from "../utils/country";
+import { formatCountryRemark, hasRegionName, normalizeCountryCode } from "../utils/country";
 
 function toRegex(pattern: string): RegExp {
   try {
@@ -315,8 +315,8 @@ export function nodeRename(node: Proxy, renameArray: RegexMatchConfig[]): void {
 }
 
 /**
- * Prefix a node's remark with its server country/region when the remark does
- * not already mention one (e.g. `server1` -> `美国-server1`).
+ * Prefix a node's remark with its ISO server country when the remark does
+ * not already mention one (e.g. `server1` -> `US-server1`).
  *
  * `resolve` returns an ISO 3166-1 alpha-2 code; a missing/unknown code leaves
  * the remark untouched. Mirrors the request `auto_country` switch.
@@ -324,7 +324,6 @@ export function nodeRename(node: Proxy, renameArray: RegexMatchConfig[]): void {
 export function addCountryPrefix(
   node: Proxy,
   resolve: (node: Proxy) => string | undefined,
-  locale = "zh-CN",
 ): string {
   const remark = node.remark.trim();
   if (hasRegionName(remark)) {
@@ -334,7 +333,42 @@ export function addCountryPrefix(
   if (code === undefined || code === "") {
     return node.remark;
   }
-  return formatCountryRemark(remark, code, locale);
+  return formatCountryRemark(remark, code);
+}
+
+/**
+ * Drop nodes by GeoIP country: keep only `include` codes (unknown countries
+ * never match, so they are dropped), then drop `exclude` codes (unknown
+ * countries are kept). Invalid codes are ignored.
+ */
+export function filterNodesByCountry(
+  nodes: Proxy[],
+  resolve: ((node: Proxy) => string | undefined) | undefined,
+  include: string[],
+  exclude: string[],
+): void {
+  const includeSet = new Set(
+    include.map((code) => normalizeCountryCode(code)).filter((code) => code !== undefined),
+  );
+  const excludeSet = new Set(
+    exclude.map((code) => normalizeCountryCode(code)).filter((code) => code !== undefined),
+  );
+  if (includeSet.size === 0 && excludeSet.size === 0) {
+    return;
+  }
+  const kept: Proxy[] = [];
+  for (const node of nodes) {
+    const code = resolve ? normalizeCountryCode(resolve(node) ?? "") : undefined;
+    if (includeSet.size > 0 && (code === undefined || !includeSet.has(code))) {
+      continue;
+    }
+    if (code !== undefined && excludeSet.has(code)) {
+      continue;
+    }
+    kept.push(node);
+  }
+  nodes.length = 0;
+  nodes.push(...kept);
 }
 
 export interface PreprocessOptions {
@@ -348,8 +382,15 @@ export interface PreprocessOptions {
   /** Literal fragments stripped from names before every other naming rule. */
   nameRemove?: string[];
   autoCountry?: boolean;
-  countryLocale?: string;
   countryResolver?: (node: Proxy) => string | undefined;
+  /** Keep only nodes whose GeoIP country is in this ISO code list. */
+  includeCountries?: string[];
+  /** Drop nodes whose GeoIP country is in this ISO code list. */
+  excludeCountries?: string[];
+  /** Keep only nodes matching one of these remark rules (empty keeps all). */
+  includeRemarks?: string[];
+  /** Drop nodes matching one of these remark rules. */
+  excludeRemarks?: string[];
 }
 
 /** Apply name cleanup, emoji removal, renaming, emoji insertion, and optional sorting. */
@@ -369,12 +410,26 @@ export function preprocessNodes(nodes: Proxy[], options: PreprocessOptions): voi
       node.remark = addEmoji(node, options.emojiArray);
     }
     if (options.autoCountry && options.countryResolver) {
-      node.remark = addCountryPrefix(
-        node,
-        options.countryResolver,
-        options.countryLocale ?? "zh-CN",
-      );
+      node.remark = addCountryPrefix(node, options.countryResolver);
     }
+  }
+  filterNodesByCountry(
+    nodes,
+    options.countryResolver,
+    options.includeCountries ?? [],
+    options.excludeCountries ?? [],
+  );
+  const includeRemarks = options.includeRemarks ?? [];
+  const excludeRemarks = options.excludeRemarks ?? [];
+  if (includeRemarks.length > 0 || excludeRemarks.length > 0) {
+    const kept = nodes.filter((node) => !checkIgnore(node, excludeRemarks, includeRemarks));
+    // Renumber without touching groupId (unlike `filterNodes`, which
+    // reassigns a single group).
+    kept.forEach((node, index) => {
+      node.id = index;
+    });
+    nodes.length = 0;
+    nodes.push(...kept);
   }
   if (options.sortFlag) {
     nodes.sort((a, b) => (a.remark < b.remark ? -1 : a.remark > b.remark ? 1 : 0));

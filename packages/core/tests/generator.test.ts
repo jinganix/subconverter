@@ -179,7 +179,7 @@ describe("preprocessNodes", () => {
       renameArray: [{ match: "^server", replace: "node", script: "" }],
       sortFlag: false,
     });
-    expect(nodes.map((n) => n.remark)).toEqual(["美国-node1", "美国-node2"]);
+    expect(nodes.map((n) => n.remark)).toEqual(["US-node1", "US-node2"]);
   });
 
   it("keeps the original name when a regex matches everything", () => {

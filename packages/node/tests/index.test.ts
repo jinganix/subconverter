@@ -184,21 +184,34 @@ describe("auto country", () => {
       target: "clash" as never,
     });
     runPreprocess(input.nodes, input.settings);
-    expect(input.nodes.map((node) => node.remark)).toEqual(["美国-server1", "香港-01"]);
+    expect(input.nodes.map((node) => node.remark)).toEqual(["US-server1", "香港-01"]);
   });
 
-  it("honors a custom country locale", async () => {
+  it("filters by country using the GeoIP database", async () => {
     const { buildGeoIpFixture } = await import("./mmdb-fixture");
     const path = join(dir, "geo.mmdb");
-    await writeFile(path, buildGeoIpFixture({ "1.2.3.4": "US" }));
+    await writeFile(path, buildGeoIpFixture({ "1.2.3.4": "US", "5.6.7.8": "NL" }));
     const input = await prepareConversion({
       geoipPath: path,
-      settings: { autoCountry: true, countryLocale: "en" },
-      sources: [{ kind: "text", text: "trojan://pw@1.2.3.4:443#server1" }],
+      settings: { excludeCountries: ["NL"] },
+      sources: [
+        { kind: "text", text: "trojan://pw@1.2.3.4:443#server1" },
+        { kind: "text", text: "trojan://pw@5.6.7.8:443#server2" },
+      ],
       target: "clash" as never,
     });
     runPreprocess(input.nodes, input.settings);
-    expect(input.nodes[0]?.remark).toBe("United States-server1");
+    expect(input.nodes.map((node) => node.remark)).toEqual(["server1"]);
+  });
+
+  it("requires a database for country filters", async () => {
+    await expect(
+      prepareConversion({
+        settings: { includeCountries: ["US"] },
+        sources: [{ kind: "text", text: "trojan://pw@1.2.3.4:443#A" }],
+        target: "clash" as never,
+      }),
+    ).rejects.toThrow(/geoipPath/);
   });
 
   it("requires a database when autoCountry is on", async () => {

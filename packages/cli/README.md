@@ -46,7 +46,8 @@ subconverter serve --port 25500 --host 0.0.0.0
 - `--config <path|url>` — external `[custom]` INI, like upstream `config=`.
 - `--base <path>` — base config merged under the generated proxies/groups/rules.
 - `--name-regex <match@replace>` / `--name-remove <a,b>` — clean names before renaming.
-- `--auto-country` with `--geoip <mmdb>` — prefix names that lack a country.
+- `--auto-country` with `--geoip <mmdb>` — prefix names that lack a country (ISO code).
+- `--include-country <list>` / `--exclude-country <list>` — keep/drop ISO countries.
 - `--no-rules` — strip rules and default groups (they are on by default).
 - `--surge-version <n>` — Surge target version (default 5).
 

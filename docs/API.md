@@ -53,8 +53,8 @@ Modules:
 - [`generator/surge`](#subconvertercore-generatorsurge): `generatePeer`, `toSurge`
 - [`generator/surfboard`](#subconvertercore-generatorsurfboard): `toSurfboard`, `SurfboardOptions`
 - [`generator/links`](#subconvertercore-generatorlinks): `proxyToSingle`, `proxyToSsd`, `proxyToSsSub`, `ssLinkConstruct`, `ssrLinkConstruct`, `trojanLinkConstruct`, `vmessLinkConstruct`
-- [`generator/nodes`](#subconvertercore-generatornodes): `addEmoji`, `addCountryPrefix`, `applyMatcher`, `checkIgnore`, `dedupeNodes`, `filterNodes`, `groupGenerate`, `matchRange`, `nodeNameRegex`, `nodeNameRemove`, `nodeRename`, `preprocessNodes`, `processRemark`, `removeEmoji`
-- [`utils/country`](#subconvertercore-utilscountry): `formatCountryRemark`, `hasRegionName`, `isRegionCode`, `regionDisplayName`, `regionFlag`
+- [`generator/nodes`](#subconvertercore-generatornodes): `addEmoji`, `addCountryPrefix`, `applyMatcher`, `checkIgnore`, `dedupeNodes`, `filterNodes`, `filterNodesByCountry`, `groupGenerate`, `matchRange`, `nodeNameRegex`, `nodeNameRemove`, `nodeRename`, `preprocessNodes`, `processRemark`, `removeEmoji`
+- [`utils/country`](#subconvertercore-utilscountry): `formatCountryRemark`, `hasRegionName`, `isRegionCode`, `normalizeCountryCode`
 
 ### @subconverter/core: types/proxy-group
 
@@ -383,9 +383,12 @@ Members:
 - `nameRemove` (`string[]`, required) — Literal fragments stripped from node names before every other naming rule.
 - `addEmoji` (`boolean`, required)
 - `removeEmoji` (`boolean`, required)
-- `autoCountry` (`boolean`, required) — Prefix node names with the server's country/region when the name lacks one.
-- `countryLocale` (`string`, required) — Locale used for `Intl.DisplayNames` country names (default `zh-CN`).
-- `countryResolver` (`(node: Proxy) => string | undefined`, optional) — Resolve a node's ISO 3166-1 alpha-2 country code. Platform-free: the Node adapter supplies a GeoIP-backed lookup; browsers may supply their own.
+- `autoCountry` (`boolean`, required) — Prefix node names with the server's ISO country code when the name lacks one.
+- `countryResolver` (`(node: Proxy) => string | undefined`, optional) — Resolve a node's ISO 3166-1 alpha-2 country code. Platform-free: the Node adapter supplies a GeoIP-backed lookup; browsers may supply their own. Required by `autoCountry` and the country filters below.
+- `includeCountries` (`string[]`, required) — Keep only nodes whose GeoIP country is in this ISO code list.
+- `excludeCountries` (`string[]`, required) — Drop nodes whose GeoIP country is in this ISO code list.
+- `includeRemarks` (`string[]`, required) — Keep only nodes matching one of these remark rules (empty keeps all).
+- `excludeRemarks` (`string[]`, required) — Drop nodes matching one of these remark rules.
 - `appendProxyType` (`boolean`, required)
 - `nodeList` (`boolean`, required)
 - `sortFlag` (`boolean`, required)
@@ -440,6 +443,8 @@ Members:
 - `nameRemove` (`string[]`, required) — Literal fragments removed from node names before renaming.
 - `includeRemarks` (`string[]`, required)
 - `excludeRemarks` (`string[]`, required)
+- `includeCountries` (`string[]`, required) — Keep only nodes whose GeoIP country is in this ISO code list.
+- `excludeCountries` (`string[]`, required) — Drop nodes whose GeoIP country is in this ISO code list.
 - `addEmoji` (`boolean`, required)
 - `removeEmoji` (`boolean`, required)
 - `autoCountry` (`boolean`, required)
@@ -974,6 +979,8 @@ Members:
 - `nameRemove` (`string[]`, required)
 - `includeRemarks` (`string[]`, required)
 - `excludeRemarks` (`string[]`, required)
+- `includeCountries` (`string[]`, required)
+- `excludeCountries` (`string[]`, required)
 - `addEmoji` (`boolean`, required)
 - `removeEmoji` (`boolean`, required)
 - `autoCountry` (`boolean`, required)
@@ -2185,18 +2192,14 @@ function addEmoji(node: Proxy, emojiArray: RegexMatchConfig[]): string;
 
 #### `addCountryPrefix` (function)
 
-> Prefix a node's remark with its server country/region when the remark does
-> not already mention one (e.g. `server1` -> `美国-server1`).
+> Prefix a node's remark with its ISO server country when the remark does
+> not already mention one (e.g. `server1` -> `US-server1`).
 >
 > `resolve` returns an ISO 3166-1 alpha-2 code; a missing/unknown code leaves
 > the remark untouched. Mirrors the request `auto_country` switch.
 
 ```ts
-function addCountryPrefix(
-  node: Proxy,
-  resolve: (node: Proxy) => string | undefined,
-  locale = "zh-CN",
-): string;
+function addCountryPrefix(node: Proxy, resolve: (node: Proxy) => string | undefined): string;
 ```
 
 #### `applyMatcher` (function)
@@ -2236,6 +2239,21 @@ function filterNodes(
   excludeRemarks: string[],
   includeRemarks: string[],
   groupId: number,
+): void;
+```
+
+#### `filterNodesByCountry` (function)
+
+> Drop nodes by GeoIP country: keep only `include` codes (unknown countries
+> never match, so they are dropped), then drop `exclude` codes (unknown
+> countries are kept). Invalid codes are ignored.
+
+```ts
+function filterNodesByCountry(
+  nodes: Proxy[],
+  resolve: ((node: Proxy) => string | undefined) | undefined,
+  include: string[],
+  exclude: string[],
 ): void;
 ```
 
@@ -2316,11 +2334,12 @@ Source: [`./src/utils/country.ts`](../packages/core/src/utils/country.ts)
 
 #### `formatCountryRemark` (function)
 
-> Prepend `name-` to a node remark (e.g. `server1` -> `美国-server1`).
-> An empty remark becomes just the country name.
+> Prefix a remark with the ISO country code (e.g. `server1` -> `US-server1`).
+> An empty remark becomes just the code. Invalid codes leave the remark
+> unchanged.
 
 ```ts
-function formatCountryRemark(remark: string, code: string, locale = "zh-CN"): string;
+function formatCountryRemark(remark: string, code: string): string;
 ```
 
 #### `hasRegionName` (function)
@@ -2341,20 +2360,13 @@ function hasRegionName(remark: string): boolean;
 function isRegionCode(code: string): boolean;
 ```
 
-#### `regionDisplayName` (function)
+#### `normalizeCountryCode` (function)
 
-> Localized country/region name (e.g. `美国`), falling back to the code.
-
-```ts
-function regionDisplayName(code: string, locale = "zh-CN"): string;
-```
-
-#### `regionFlag` (function)
-
-> Flag emoji for a region code, or `""` when the code is invalid.
+> Normalize user input to an ISO 3166-1 alpha-2 code (`"us"` -> `"US"`),
+> or `undefined` when it is not a known region. Used for country filters.
 
 ```ts
-function regionFlag(code: string): string;
+function normalizeCountryCode(code: string): string | undefined;
 ```
 
 ## @subconverter/node

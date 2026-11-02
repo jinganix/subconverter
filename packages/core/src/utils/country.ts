@@ -1,9 +1,10 @@
 /**
- * ISO 3166-1 alpha-2 region helpers used when a proxy name has no country.
+ * ISO 3166-1 alpha-2 region helpers.
  *
- * The display names come from `Intl.DisplayNames` (no bundled database), with
- * small overrides where the CLDR Chinese name is too verbose for a node name
- * (e.g. `中国香港特别行政区` -> `香港`). Flag emoji are derived from the code.
+ * Emitted prefixes are always the uppercase ISO code (`US-server1`) so node
+ * names stay stable across locales. Multilingual names (Chinese/English
+ * spellings, flag emoji) are only recognized by `hasRegionName` so existing
+ * names are never double-prefixed.
  */
 
 /** All ISO 3166-1 alpha-2 codes, sorted, used for alias detection. */
@@ -345,8 +346,17 @@ function normalizeRegionCode(code: string): string {
   return /^[A-Z]{2}$/.test(upper) ? upper : "";
 }
 
-/** Localized country/region name (e.g. `美国`), falling back to the code. */
-export function regionDisplayName(code: string, locale = "zh-CN"): string {
+/**
+ * Normalize user input to an ISO 3166-1 alpha-2 code (`"us"` -> `"US"`),
+ * or `undefined` when it is not a known region. Used for country filters.
+ */
+export function normalizeCountryCode(code: string): string | undefined {
+  const upper = normalizeRegionCode(code);
+  return upper !== "" && isRegionCode(upper) ? upper : undefined;
+}
+
+/** Localized country/region name for alias detection only (never emitted). */
+function displayName(code: string, locale: string): string {
   const upper = normalizeRegionCode(code);
   if (upper === "") {
     return code.trim();
@@ -362,7 +372,7 @@ export function regionDisplayName(code: string, locale = "zh-CN"): string {
 }
 
 /** Flag emoji for a region code, or `""` when the code is invalid. */
-export function regionFlag(code: string): string {
+function regionFlag(code: string): string {
   const upper = normalizeRegionCode(code);
   if (upper === "") {
     return "";
@@ -395,8 +405,8 @@ function buildAliasRegex(): RegExp {
     }
   };
   for (const code of REGION_CODES) {
-    add(regionDisplayName(code, "zh-CN"));
-    add(regionDisplayName(code, "en"));
+    add(displayName(code, "zh-CN"));
+    add(displayName(code, "en"));
     add(regionFlag(code));
   }
   for (const alias of EXTRA_ALIASES) {
@@ -447,14 +457,15 @@ export function hasRegionName(remark: string): boolean {
 }
 
 /**
- * Prepend `name-` to a node remark (e.g. `server1` -> `美国-server1`).
- * An empty remark becomes just the country name.
+ * Prefix a remark with the ISO country code (e.g. `server1` -> `US-server1`).
+ * An empty remark becomes just the code. Invalid codes leave the remark
+ * unchanged.
  */
-export function formatCountryRemark(remark: string, code: string, locale = "zh-CN"): string {
-  const name = regionDisplayName(code, locale);
+export function formatCountryRemark(remark: string, code: string): string {
+  const normalized = normalizeCountryCode(code);
   const trimmed = remark.trim();
-  if (name === "") {
+  if (normalized === undefined) {
     return trimmed;
   }
-  return trimmed === "" ? name : `${name}-${trimmed}`;
+  return trimmed === "" ? normalized : `${normalized}-${trimmed}`;
 }
