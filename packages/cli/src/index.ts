@@ -230,9 +230,10 @@ Convert options:
   -e, --emoji <m@r>     Emoji rule: match-regex@emoji
       --add-emoji       Prepend emoji using the emoji rules
       --remove-emoji    Strip leading emoji from names
-      --auto-country    Prefix names lacking a country with the server's country
-      --geoip <mmdb>    GeoLite2/GeoIP2 database (required by --auto-country)
-      --country-locale <l>  Locale for country names (default zh-CN)
+      --auto-country    Prefix names lacking a country with the server's ISO code
+      --geoip <mmdb>    GeoLite2/GeoIP2 database (required by --auto-country and country filters)
+      --include-country <list>  Keep only nodes in these ISO countries (repeatable, comma-separated)
+      --exclude-country <list>  Drop nodes in these ISO countries (repeatable, comma-separated)
       --append-type     Prefix node names with their proxy type
       --node-list       Emit a bare node list (no groups/wrapper)
       --sort            Sort nodes by name
@@ -388,10 +389,19 @@ async function runConvert(state: ArgState): Promise<number> {
       ? flagBool(state, "auto-country")
       : flag(state, "geoip") !== undefined,
     clashNewFieldName: resolveClashNewFieldName(state),
-    countryLocale: flag(state, "country-locale") ?? "zh-CN",
     dedupe: flagBool(state, "dedupe"),
     emojiArray: parseEmojiRules(flagAll(state, "emoji")),
+    excludeCountries: parseNameRemove([
+      ...flagAll(state, "exclude-country"),
+      ...flagAll(state, "exclude_country"),
+    ]).map((code) => code.toUpperCase()),
+    excludeRemarks: [],
     filterDeprecated: flagBool(state, "filter-deprecated"),
+    includeCountries: parseNameRemove([
+      ...flagAll(state, "include-country"),
+      ...flagAll(state, "include_country"),
+    ]).map((code) => code.toUpperCase()),
+    includeRemarks: [],
     nameRegexArray: parseRenameRules([
       ...flagAll(state, "name-regex"),
       ...flagAll(state, "name_regex"),
@@ -437,6 +447,24 @@ async function runConvert(state: ArgState): Promise<number> {
     if (external.nameRemove.length > 0) {
       settings.nameRemove = [...(settings.nameRemove ?? []), ...external.nameRemove];
     }
+    if (external.includeCountries.length > 0) {
+      settings.includeCountries = [
+        ...(settings.includeCountries ?? []),
+        ...external.includeCountries,
+      ];
+    }
+    if (external.excludeCountries.length > 0) {
+      settings.excludeCountries = [
+        ...(settings.excludeCountries ?? []),
+        ...external.excludeCountries,
+      ];
+    }
+    if (external.includeRemarks.length > 0) {
+      settings.includeRemarks = [...(settings.includeRemarks ?? []), ...external.includeRemarks];
+    }
+    if (external.excludeRemarks.length > 0) {
+      settings.excludeRemarks = [...(settings.excludeRemarks ?? []), ...external.excludeRemarks];
+    }
     settings.enableRuleGenerator = external.enableRuleGenerator;
     settings.overwriteOriginalRules = external.overwriteOriginalRules;
     if (external.addEmoji) {
@@ -477,10 +505,16 @@ async function runConvert(state: ArgState): Promise<number> {
   const surgeRaw = flag(state, "surge-version") ?? "5";
   const surgeVersion = Number.parseInt(surgeRaw.trim(), 10) || 5;
 
-  if (settings.autoCountry) {
+  if (
+    settings.autoCountry ||
+    (settings.includeCountries?.length ?? 0) > 0 ||
+    (settings.excludeCountries?.length ?? 0) > 0
+  ) {
     const geoipPath = flag(state, "geoip");
     if (geoipPath === undefined || geoipPath === "" || geoipPath === "true") {
-      process.stderr.write("--auto-country requires --geoip <path to GeoLite2/GeoIP2 .mmdb>.\n");
+      process.stderr.write(
+        "--auto-country and country filters require --geoip <path to GeoLite2/GeoIP2 .mmdb>.\n",
+      );
       return 1;
     }
     try {
@@ -504,6 +538,10 @@ async function runConvert(state: ArgState): Promise<number> {
     surgeVersion,
     target,
   });
+  if (nodes.length === 0) {
+    process.stderr.write("No proxy nodes left after include/exclude filtering.\n");
+    return 1;
+  }
 
   const outPath = flag(state, "out");
   if (outPath) {

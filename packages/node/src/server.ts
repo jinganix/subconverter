@@ -529,7 +529,11 @@ function toExtraSettings(request: RequestSettings, rawQuery: string): ExtraSetti
     clashScript: request.clashScript,
     dedupe: queryBoolFlag(rawQuery, "dedupe", "deduplicate") ?? false,
     emojiArray: request.emoji,
+    excludeCountries: request.excludeCountries,
+    excludeRemarks: request.excludeRemarks,
     filterDeprecated: request.filterDeprecated,
+    includeCountries: request.includeCountries,
+    includeRemarks: request.includeRemarks,
     nameRegexArray: request.nameRegex,
     nameRemove: request.nameRemove,
     nodeList: request.nodeList,
@@ -739,6 +743,10 @@ export async function convertSubRequest(
         request.emoji.push(...external.emoji);
         request.nameRegex.push(...external.nameRegex);
         request.nameRemove.push(...external.nameRemove);
+        request.includeRemarks.push(...external.includeRemarks);
+        request.excludeRemarks.push(...external.excludeRemarks);
+        request.includeCountries.push(...external.includeCountries);
+        request.excludeCountries.push(...external.excludeCountries);
         if (external.addEmoji) {
           request.addEmoji = true;
         }
@@ -767,13 +775,19 @@ export async function convertSubRequest(
   // (including external-config entries pushed above); do not append again.
   const settings = toExtraSettings(request, rawQuery);
   // A configured database turns country prefixes on by default, so mounting a
-  // `.mmdb` is enough to get `美国-server1`; `auto_country=false` opts out.
+  // `.mmdb` is enough to get `US-server1`; `auto_country=false` opts out.
+  // Country filters (`include_country`/`exclude_country`) also need the
+  // database. The path is CLI-only, never accepted from the query.
   const autoCountryFlag = queryBoolFlag(rawQuery, "auto_country", "auto-country");
   if (autoCountryFlag !== undefined) {
     settings.autoCountry = autoCountryFlag;
   } else if (options.geoipPath !== undefined) {
     settings.autoCountry = true;
   }
+  const needsCountry =
+    settings.autoCountry ||
+    settings.includeCountries.length > 0 ||
+    settings.excludeCountries.length > 0;
 
   const surgeVersionRaw = rawFirst(rawQuery, "surge_version", "surge-version", "ver", "version");
   const surgeVersion = surgeVersionRaw === "" ? 5 : Number.parseInt(surgeVersionRaw, 10) || 5;
@@ -797,11 +811,11 @@ export async function convertSubRequest(
     resolvedGroups = getDefaultProxyGroups();
   }
 
-  if (settings.autoCountry) {
+  if (needsCountry) {
     if (options.geoipPath === undefined) {
       throw Object.assign(
         new Error(
-          "auto_country requires a GeoIP database: start the server with --geoip <mmdb path>.",
+          "auto_country and country filters require a GeoIP database: start the server with --geoip <mmdb path>.",
         ),
         { statusCode: 400 },
       );
@@ -829,6 +843,11 @@ export async function convertSubRequest(
     surgeVersion,
     target: target as TargetFormat,
   });
+  if (nodes.length === 0) {
+    throw Object.assign(new Error("No proxy nodes left after include/exclude filtering."), {
+      statusCode: 400,
+    });
+  }
 
   // Await the quota fetch kicked off alongside the subscriptions above;
   // without `userinfo_url` (or with an unknown shape and no explicit

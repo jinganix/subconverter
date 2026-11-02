@@ -64,7 +64,7 @@ const out = generate(input.nodes, {
 Default rulesets resolve through `getCachedDefaultRulesets` with a TTL and single-flight
 fetch, falling back to bundled offline rules when the network is unavailable.
 
-## GeoIP country prefix
+## GeoIP country prefix and filtering
 
 ```ts
 import { buildCountryResolver } from "@subconverter/node";
@@ -75,8 +75,11 @@ const settings = {
 };
 ```
 
-Requires a local MaxMind GeoLite2/GeoIP2 `.mmdb` database. GeoIP lookups are cached per
-hostname, and a missing database is an error rather than a silent no-op.
+Requires a local MaxMind GeoLite2/GeoIP2 `.mmdb` database. The prefix is always
+the uppercase ISO code (`US-server1`). `includeCountries`/`excludeCountries`
+(e.g. `["US"]`, `["NL"]`) filter nodes by GeoIP country without touching
+names. GeoIP lookups are cached per hostname, and a missing database is an
+error rather than a silent no-op.
 
 ## HTTP server
 

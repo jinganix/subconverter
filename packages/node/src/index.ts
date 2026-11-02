@@ -319,10 +319,14 @@ export async function prepareConversion(request: ConvertRequest): Promise<Conver
   }
   const nodes = await collectNodes(request.sources);
   const settings: ExtraSettings = { ...createExtraSettings(), ...request.settings };
-  if (settings.autoCountry && settings.countryResolver === undefined) {
+  const needsCountry =
+    settings.autoCountry ||
+    settings.includeCountries.length > 0 ||
+    settings.excludeCountries.length > 0;
+  if (needsCountry && settings.countryResolver === undefined) {
     if (request.geoipPath === undefined) {
       throw new Error(
-        "autoCountry requires a GeoIP database: pass `geoipPath` (a GeoLite2/GeoIP2 .mmdb file).",
+        "autoCountry and country filters require a GeoIP database: pass `geoipPath` (a GeoLite2/GeoIP2 .mmdb file).",
       );
     }
     settings.countryResolver = await buildCountryResolver(nodes, request.geoipPath);

@@ -11,6 +11,22 @@ the same commits.
 
 ## [Unreleased]
 
+### Changed
+
+- Country prefixes are always the uppercase ISO code (`US-server1`), never a
+  localized name. `countryLocale` / `--country-locale` and the `regionDisplayName` /
+  `regionFlag` exports are gone; multilingual names are still recognized so existing
+  names are never double-prefixed.
+
+### Added
+
+- Country filtering by GeoIP: `include_country` / `exclude_country` query params
+  (repeatable, comma-separated), `--include-country` / `--exclude-country` CLI flags,
+  and `include_country` / `exclude_country` INI keys. `include_country=US` keeps only
+  US nodes (unknown countries dropped); `exclude_country=NL` drops Dutch nodes
+  (unknown kept). Both need `--geoip`. Query `include` / `exclude` remark filters are
+  now applied during generation as well.
+
 ## [0.2.1] - 2026-10-24
 
 First release published to npm since 0.1.0: the 0.2.0 GitHub release and tag exist,

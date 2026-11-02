@@ -201,7 +201,7 @@ subconverter serve --port 25500 --host 0.0.0.0
 `--auto-country` 和排序**之前**执行，后续规则看到的是清理后的名字：
 
 ```bash
-# abc@server1.xxx.yyy -> server1 -> 美国-server1
+# abc@server1.xxx.yyy -> server1 -> US-server1
 subconverter convert --file sub.txt --target clash \
   --name-regex '^abc@([^.]+)\..*$@$1' --auto-country --geoip ./GeoLite2-Country.mmdb
 
@@ -215,17 +215,17 @@ subconverter convert --file sub.txt --target clash --name-remove 'foo,bar'
 ### 按 IP 自动加国家/地区前缀
 
 名字里没有国家/地区信息时，按服务器 IP 查询本地 MaxMind 数据库
-（GeoLite2/GeoIP2 Country 或 City `.mmdb`），把国家/地区加到名字最前面：
+（GeoLite2/GeoIP2 Country 或 City `.mmdb`），把 ISO 国家代码加到名字最前面
+（`CN`、`US` 等，与语言无关）：
 
 ```bash
 subconverter convert --file sub.txt --target clash \
   --auto-country --geoip ./GeoLite2-Country.mmdb
-# server1 -> 美国-server1
+# server1 -> US-server1
 ```
 
-`--country-locale` 指定 `Intl.DisplayNames` 的区域语言（默认 `zh-CN`，`en` 会得到
-`United States-server1`）。已经包含国家/地区的名字（`香港-01`、`US01`、`🇭🇰 HK`、
-`Hong Kong 01`）保持不变；域名服务器会先做一次 DNS 解析（同一主机名只查一次）。
+已经包含国家/地区的名字（`香港-01`、`US01`、`🇭🇰 HK`、
+`Hong Kong 01`）保持不变，因此不同语言环境下前缀保持稳定；域名服务器会先做一次 DNS 解析（同一主机名只查一次）。
 数据库需自行从 MaxMind 下载（GeoLite2 需免费账号）或使用兼容镜像，仓库不内置。
 `data/` 已被 git 忽略，适合放本地副本：
 
@@ -282,8 +282,12 @@ URL（拒绝本地路径）；`[]RULE` 内联规则集不受影响。
   `Proxy`/`Proxy Group`/`Rule`，优先于 `new_field_name`。
 - `with_rules`（`with-rules`；默认 `true`）——附加规则 + 默认分组（兼容保留）。
 - `no_rules`（`no-rules`；默认 `false`）——去掉规则与默认分组。
-- `auto_country`（`auto-country`）——给缺少国家/地区的名字加前缀；服务端带 `--geoip`
-  时默认开启。
+- `auto_country`（`auto-country`）——给缺少国家/地区的名字加 ISO 代码前缀；服务端带
+  `--geoip` 时默认开启。
+- `include_country`（`include-country`；可重复、逗号分隔）——只保留这些 ISO 国家的节点
+  （如 `include_country=US,JP`），未知国家节点会被丢弃；需要 `--geoip`。
+- `exclude_country`（`exclude-country`；可重复、逗号分隔）——排除这些 ISO 国家的节点
+  （如 `exclude_country=NL`），未知国家节点会被保留；需要 `--geoip`。
 - `name_regex`——重命名前对名字做 `匹配@替换` 正则替换（可重复）。
 - `name_remove`——重命名前按逗号分隔的字面量删除名字片段。
 - `userinfo_url`（别名 `userinfo-url`、`userinfo`）——额外流量接口（见下）。

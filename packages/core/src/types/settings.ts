@@ -44,15 +44,22 @@ export interface ExtraSettings {
   nameRemove: string[];
   addEmoji: boolean;
   removeEmoji: boolean;
-  /** Prefix node names with the server's country/region when the name lacks one. */
+  /** Prefix node names with the server's ISO country code when the name lacks one. */
   autoCountry: boolean;
-  /** Locale used for `Intl.DisplayNames` country names (default `zh-CN`). */
-  countryLocale: string;
   /**
    * Resolve a node's ISO 3166-1 alpha-2 country code. Platform-free: the Node
    * adapter supplies a GeoIP-backed lookup; browsers may supply their own.
+   * Required by `autoCountry` and the country filters below.
    */
   countryResolver?: (node: Proxy) => string | undefined;
+  /** Keep only nodes whose GeoIP country is in this ISO code list. */
+  includeCountries: string[];
+  /** Drop nodes whose GeoIP country is in this ISO code list. */
+  excludeCountries: string[];
+  /** Keep only nodes matching one of these remark rules (empty keeps all). */
+  includeRemarks: string[];
+  /** Drop nodes matching one of these remark rules. */
+  excludeRemarks: string[];
   appendProxyType: boolean;
   nodeList: boolean;
   sortFlag: boolean;
@@ -86,12 +93,15 @@ export function createExtraSettings(): ExtraSettings {
     clashProxiesStyle: "flow",
     clashProxyGroupsStyle: "flow",
     clashScript: false,
-    countryLocale: "zh-CN",
     countryResolver: undefined,
     dedupe: false,
     emojiArray: [],
     enableRuleGenerator: true,
+    excludeCountries: [],
+    excludeRemarks: [],
     filterDeprecated: false,
+    includeCountries: [],
+    includeRemarks: [],
     managedConfigPrefix: "",
     nameRegexArray: [],
     nameRemove: [],
@@ -124,6 +134,10 @@ export interface RequestSettings {
   nameRemove: string[];
   includeRemarks: string[];
   excludeRemarks: string[];
+  /** Keep only nodes whose GeoIP country is in this ISO code list. */
+  includeCountries: string[];
+  /** Drop nodes whose GeoIP country is in this ISO code list. */
+  excludeCountries: string[];
   addEmoji: boolean;
   removeEmoji: boolean;
   autoCountry: boolean;

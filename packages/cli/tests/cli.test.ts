@@ -258,9 +258,9 @@ describe("cli auto country", () => {
       geoipPath,
     ]);
     expect(code).toBe(0);
-    expect(stdout).toContain("美国-server1");
+    expect(stdout).toContain("US-server1");
     expect(stdout).toContain("JP-02");
-    expect(stdout).not.toContain("日本-JP-02");
+    expect(stdout).not.toContain("JP-JP-02");
   });
 
   it("requires --geoip with --auto-country", async () => {
@@ -287,11 +287,13 @@ describe("cli auto country", () => {
     ).toBe(1);
   });
 
-  it("honors --country-locale", async () => {
+  it("keeps only --include-country nodes and drops --exclude-country nodes", async () => {
     const { buildGeoIpFixture } = await import("../../node/tests/mmdb-fixture");
     const geoipPath = join(dir, "geo.mmdb");
-    await writeFile(geoipPath, buildGeoIpFixture({ "1.2.3.4": "US" }));
-    const path = await writeSub("trojan://pw@1.2.3.4:443#server1");
+    await writeFile(geoipPath, buildGeoIpFixture({ "1.2.3.4": "US", "5.6.7.8": "NL" }));
+    const path = await writeSub(
+      ["trojan://pw@1.2.3.4:443#server1", "trojan://pw@5.6.7.8:443#server2"].join("\n"),
+    );
     expect(
       await runCli([
         "convert",
@@ -300,14 +302,49 @@ describe("cli auto country", () => {
         "--target",
         "clash",
         "--no-rules",
-        "--auto-country",
         "--geoip",
         geoipPath,
-        "--country-locale",
-        "en",
+        "--auto-country=false",
+        "--include-country",
+        "US",
       ]),
     ).toBe(0);
-    expect(stdout).toContain("United States-server1");
+    expect(stdout).toContain("server1");
+    expect(stdout).not.toContain("server2");
+    stdout = "";
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "clash",
+        "--no-rules",
+        "--geoip",
+        geoipPath,
+        "--auto-country=false",
+        "--exclude-country",
+        "nl",
+      ]),
+    ).toBe(0);
+    expect(stdout).toContain("server1");
+    expect(stdout).not.toContain("server2");
+  });
+
+  it("requires --geoip with country filters", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#server1");
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "clash",
+        "--include-country",
+        "US",
+      ]),
+    ).toBe(1);
+    expect(stderr).toContain("--geoip");
   });
 });
 
@@ -329,7 +366,7 @@ describe("cli geoip implies auto country", () => {
         geoipPath,
       ]),
     ).toBe(0);
-    expect(stdout).toContain("美国-server1");
+    expect(stdout).toContain("US-server1");
   });
 
   it("lets --auto-country=false disable the implicit enable", async () => {
@@ -350,7 +387,7 @@ describe("cli geoip implies auto country", () => {
         "--auto-country=false",
       ]),
     ).toBe(0);
-    expect(stdout).not.toContain("美国-server1");
+    expect(stdout).not.toContain("US-server1");
   });
 });
 

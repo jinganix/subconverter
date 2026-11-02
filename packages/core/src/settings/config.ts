@@ -15,6 +15,8 @@ export interface ExternalConfig {
   nameRemove: string[];
   includeRemarks: string[];
   excludeRemarks: string[];
+  includeCountries: string[];
+  excludeCountries: string[];
   addEmoji: boolean;
   removeEmoji: boolean;
   autoCountry: boolean;
@@ -144,8 +146,10 @@ export function parseExternalConfig(content: string): ExternalConfig {
     baseFiles: {},
     emoji: [],
     enableRuleGenerator: true,
+    excludeCountries: [],
     excludeRemarks: [],
     groups: [],
+    includeCountries: [],
     includeRemarks: [],
     nameRegex: [],
     nameRemove: [],
@@ -214,6 +218,22 @@ export function parseExternalConfig(content: string): ExternalConfig {
         case "include":
           if (value !== "") {
             result.includeRemarks.push(value);
+          }
+          break;
+        case "include_country":
+          for (const fragment of value.split(",")) {
+            const trimmed = fragment.trim().toUpperCase();
+            if (trimmed !== "") {
+              result.includeCountries.push(trimmed);
+            }
+          }
+          break;
+        case "exclude_country":
+          for (const fragment of value.split(",")) {
+            const trimmed = fragment.trim().toUpperCase();
+            if (trimmed !== "") {
+              result.excludeCountries.push(trimmed);
+            }
           }
           break;
         case "exclude_remarks":

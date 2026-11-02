@@ -35,6 +35,14 @@ function listArg(query: string, key: string): string[] {
   return value === "" ? [] : value.split(",");
 }
 
+/** Repeatable comma-separated ISO country codes, normalized to uppercase. */
+function countryListArg(query: string, key: string): string[] {
+  return getAllUrlArgs(query, key)
+    .flatMap((raw) => raw.split(","))
+    .map((raw) => raw.trim().toUpperCase())
+    .filter((raw) => raw !== "");
+}
+
 /**
  * Resolve the Clash field-name style. Defaults to the new `proxies` /
  * `proxy-groups` / `rules` keys; `legacy=true` (or an explicit
@@ -111,9 +119,11 @@ export function createRequestSettings(): RequestSettings {
     classicalRuleset: false,
     dedupe: false,
     emoji: [],
+    excludeCountries: [],
     excludeRemarks: [],
     filterDeprecated: false,
     group: [],
+    includeCountries: [],
     includeRemarks: [],
     insert: false,
     interval: 0,
@@ -179,6 +189,8 @@ export function parseRequestSettings(query: string): RequestSettings {
   settings.proxyGroupsStyle = getUrlArg(query, "proxy_groups_style") || "flow";
   settings.includeRemarks = listArg(query, "include");
   settings.excludeRemarks = listArg(query, "exclude");
+  settings.includeCountries = countryListArg(query, "include_country");
+  settings.excludeCountries = countryListArg(query, "exclude_country");
   settings.userinfoUrl = firstArg(query, "userinfo_url", "userinfo-url", "userinfo");
   settings.userinfoProvider = firstArg(
     query,
