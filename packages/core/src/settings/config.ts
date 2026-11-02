@@ -1,9 +1,31 @@
 import type { ProxyGroupConfig } from "../types/proxy-group";
 import { BalanceStrategy, ProxyGroupType } from "../types/proxy-group";
 import type { RulesetConfig } from "../types/ruleset";
+import { RulesetType } from "../types/ruleset";
 import type { RegexMatchConfig } from "../types/settings";
 import { parseIni } from "../utils/ini";
 import { startsWith, toInt } from "../utils/string";
+
+/** `ruleset=` dialect prefixes (`surge:`, `quanx:`, `clash-domain:`, …). */
+export const RULESET_TYPE_PREFIXES: ReadonlyArray<readonly [string, RulesetType]> = [
+  ["surge:", RulesetType.Surge],
+  ["quanx:", RulesetType.QuantumultX],
+  ["quantumultx:", RulesetType.QuantumultX],
+  ["clash-domain:", RulesetType.ClashDomain],
+  ["clash-ipcidr:", RulesetType.ClashIpCidr],
+  ["clash-classic:", RulesetType.ClashClassical],
+  ["clash:", RulesetType.ClashClassical],
+];
+
+/** Split a ruleset source into its dialect prefix plus the bare URL/content. */
+export function parseRulesetSource(source: string): { url: string; type?: RulesetType } {
+  for (const [prefix, type] of RULESET_TYPE_PREFIXES) {
+    if (source.toLowerCase().startsWith(prefix)) {
+      return { type, url: source.slice(prefix.length) };
+    }
+  }
+  return { url: source };
+}
 
 /** A parsed subconverter external configuration file. */
 export interface ExternalConfig {

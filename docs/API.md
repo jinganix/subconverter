@@ -24,7 +24,7 @@ Modules:
 - [`types/proxy-group`](#subconvertercore-typesproxy-group): `BalanceStrategy`, `ProxyGroupType`, `createProxyGroupConfig`, `createSelectGroup`, `parseProxyGroupType`, `ProxyGroupConfig`
 - [`types/proxy`](#subconvertercore-typesproxy): `DEFAULT_GROUPS`, `ProxyType`, `createProxy`, `proxyTypeName`, `Proxy`
 - [`types/ruleset`](#subconvertercore-typesruleset): `RulesetType`, `createRulesetConfig`, `RulesetConfig`, `RulesetContent`
-- [`types/settings`](#subconvertercore-typessettings): `TargetFormat`, `createExtraSettings`, `ExtraSettings`, `RegexMatchConfig`, `RequestSettings`
+- [`types/settings`](#subconvertercore-typessettings): `TargetFormat`, `createExtraSettings`, `parseClashFlavor`, `ClashFlavor`, `ExtraSettings`, `RegexMatchConfig`, `RequestSettings`
 - [`types/tribool`](#subconvertercore-typestribool): `parseTriBool`, `triBoolOr`, `TriBool`
 - [`utils/base64`](#subconvertercore-utilsbase64): `base64Decode`, `base64Encode`, `tryBase64Decode`, `urlSafeBase64Decode`, `urlSafeBase64Encode`, `utf8Decode`, `utf8Encode`
 - [`utils/ini`](#subconvertercore-utilsini): `findSection`, `getSectionItems`, `parseIni`, `parseRawIni`, `renderRawIni`, `setRawSection`, `IniDocument`, `IniSection`, `RawIniSection`
@@ -32,7 +32,7 @@ Modules:
 - [`utils/url`](#subconvertercore-utilsurl): `getAllUrlArgs`, `getUrlArg`, `normalizeQueryKey`, `splitUrl`, `stripScheme`, `urlDecode`, `urlEncode`
 - [`utils/hash`](#subconvertercore-utilshash): `fnv1a64`, `fnv1a64Hex`
 - [`utils/template`](#subconvertercore-utilstemplate): `hasTemplatePlaceholders`, `renderTemplate`, `templateVariableNames`, `TemplateVars`
-- [`settings/config`](#subconvertercore-settingsconfig): `parseCustomProxyGroup`, `parseExternalConfig`, `parseGroupTimes`, `parseRegexMatch`, `parseRulesetConfig`, `ExternalConfig`
+- [`settings/config`](#subconvertercore-settingsconfig): `RULESET_TYPE_PREFIXES`, `parseCustomProxyGroup`, `parseExternalConfig`, `parseGroupTimes`, `parseRegexMatch`, `parseRulesetConfig`, `parseRulesetSource`, `ExternalConfig`
 - [`settings/request-params`](#subconvertercore-settingsrequest-params): `createRequestSettings`, `parseRequestSettings`, `queryBoolFlag`, `resolveNewFieldName`
 - [`userinfo`](#subconvertercore-userinfo): `convertUserinfo`, `formatSubscriptionUserinfo`, `inferUserinfoProviderFromUrl`, `nextMonthlyResetTimestamp`, `normalizeUserinfoProvider`, `parseJmsUserinfo`, `parseSubscriptionUserinfo`, `UserinfoData`, `UserinfoProvider`
 - [`parser/ciphers`](#subconvertercore-parserciphers): `SS_CIPHERS`, `SSR_CIPHERS`, `isFlattenableSsr`, `isSsCipher`
@@ -40,7 +40,7 @@ Modules:
 - [`parser/netch`](#subconvertercore-parsernetch): `explodeNetch`
 - [`parser/subscription`](#subconvertercore-parsersubscription): `explodeSub`, `explode`, `parseLink`, `parseSubscription`
 - [`parser/conf`](#subconvertercore-parserconf): `explodeClash`, `explodeNetchConf`, `explodeSsAndroid`, `explodeSsConf`, `explodeSsrConf`, `explodeSstap`, `explodeSurge`, `explodeVmessConf`, `parseClashText`, `parseConfContent`, `parsePeers`
-- [`parser/uri`](#subconvertercore-parseruri): `explodeAnyTls`, `explodeHttp`, `explodeHttpSub`, `explodeHysteria2`, `explodeKitsunebi`, `explodeQuan`, `explodeShadowrocket`, `explodeSocks`, `explodeSs`, `explodeSsd`, `explodeSsr`, `explodeStdVmess`, `explodeTrojan`, `explodeTuic`, `explodeVless`, `explodeVmess`, `isLink`
+- [`parser/uri`](#subconvertercore-parseruri): `explodeAnyTls`, `explodeHttp`, `explodeHttpSub`, `explodeHysteria`, `explodeHysteria2`, `explodeKitsunebi`, `explodeQuan`, `explodeShadowrocket`, `explodeSnell`, `explodeSocks`, `explodeSs`, `explodeSsd`, `explodeSsr`, `explodeStdVmess`, `explodeTrojan`, `explodeTuic`, `explodeVless`, `explodeVmess`, `explodeWireguard`, `isLink`
 - [`generator/clash`](#subconvertercore-generatorclash): `buildClash`, `stringifyClash`, `toClash`
 - [`generator/default-profile`](#subconvertercore-generatordefault-profile): `getDefaultProxyGroups`, `getDefaultRulesetConfigs`, `getDefaultRulesets`
 - [`engine`](#subconvertercore-engine): `generate`, `runPreprocess`, `toSip008`, `GenerateOptions`
@@ -53,7 +53,7 @@ Modules:
 - [`generator/surge`](#subconvertercore-generatorsurge): `generatePeer`, `toSurge`
 - [`generator/surfboard`](#subconvertercore-generatorsurfboard): `toSurfboard`, `SurfboardOptions`
 - [`generator/links`](#subconvertercore-generatorlinks): `proxyToSingle`, `proxyToSsd`, `proxyToSsSub`, `ssLinkConstruct`, `ssrLinkConstruct`, `trojanLinkConstruct`, `vmessLinkConstruct`
-- [`generator/nodes`](#subconvertercore-generatornodes): `addEmoji`, `addCountryPrefix`, `applyMatcher`, `checkIgnore`, `dedupeNodes`, `filterNodes`, `filterNodesByCountry`, `groupGenerate`, `matchRange`, `nodeNameRegex`, `nodeNameRemove`, `nodeRename`, `preprocessNodes`, `processRemark`, `removeEmoji`
+- [`generator/nodes`](#subconvertercore-generatornodes): `REGEX_BLACKLIST`, `addEmoji`, `addCountryPrefix`, `applyMatcher`, `checkIgnore`, `dedupeNodes`, `filterNodes`, `filterNodesByCountry`, `groupGenerate`, `isBlacklistedPattern`, `matchRange`, `nodeNameRegex`, `nodeNameRemove`, `nodeRename`, `preprocessNodes`, `processRemark`, `removeEmoji`
 - [`utils/country`](#subconvertercore-utilscountry): `formatCountryRemark`, `hasRegionName`, `isRegionCode`, `normalizeCountryCode`
 
 ### @subconverter/core: types/proxy-group
@@ -365,6 +365,23 @@ Source: [`./src/types/settings.ts`](../packages/core/src/types/settings.ts)
 function createExtraSettings(): ExtraSettings;
 ```
 
+#### `parseClashFlavor` (function)
+
+> Parse a `flavor=` value (case-insensitive); unknown values fall back to
+> `mihomo`, mirroring subconverter-rs `ClashFlavor::from_str`.
+
+```ts
+function parseClashFlavor(value: string | undefined | null): ClashFlavor;
+```
+
+#### `ClashFlavor` (type)
+
+> Clash kernel flavor targeted by Clash output (`flavor=`).
+
+```ts
+type ClashFlavor = "mihomo" | "premium" | "stash";
+```
+
 #### `ExtraSettings` (interface)
 
 > Per-run conversion settings, mirroring `extra_settings`.
@@ -389,6 +406,7 @@ Members:
 - `excludeCountries` (`string[]`, required) — Drop nodes whose GeoIP country is in this ISO code list.
 - `includeRemarks` (`string[]`, required) — Keep only nodes matching one of these remark rules (empty keeps all).
 - `excludeRemarks` (`string[]`, required) — Drop nodes matching one of these remark rules.
+- `expandRulesets` (`boolean`, required) — `false` keeps remote rulesets as `RULE-SET` references (Surge-family).
 - `appendProxyType` (`boolean`, required)
 - `nodeList` (`boolean`, required)
 - `sortFlag` (`boolean`, required)
@@ -396,6 +414,8 @@ Members:
 - `clashNewFieldName` (`boolean`, required)
 - `clashScript` (`boolean`, required)
 - `clashClassicalRuleset` (`boolean`, required)
+- `clashFlavor` (`ClashFlavor`, required) — Target Clash kernel: dropped protocols/fields follow its capabilities.
+- `templateVars` (`Record<string, string>`, required) — Template variables applied to `{{ var }}` placeholders in base configs.
 - `dedupe` (`boolean`, required)
 - `surgeSsrPath` (`string`, required)
 - `managedConfigPrefix` (`string`, required)
@@ -460,6 +480,11 @@ Members:
 - `tls13` (`TriBool`, required)
 - `newFieldName` (`boolean`, required)
 - `classicalRuleset` (`boolean`, required)
+- `clashFlavor` (`ClashFlavor`, required) — Target Clash kernel (`flavor=`): mihomo (default), premium, or stash.
+- `expand` (`boolean`, required) — `false` keeps remote rulesets as `RULE-SET` references (Surge-family).
+- `strict` (`boolean`, required) — Managed-config `strict=` flag for Surge-family `#!MANAGED-CONFIG`.
+- `filename` (`string`, required) — Download filename override (`filename=`).
+- `devId` (`string`, required) — Quantumult X device ID for remote-script signatures (`dev_id=`).
 - `insert` (`boolean`, required)
 - `mixin` (`string`, required)
 - `interval` (`number`, required)
@@ -756,7 +781,7 @@ function strFind(haystack: string, needle: string): boolean;
 
 #### `toBool` (function)
 
-> Parse a boolean-ish value ("true"/"false"/"1"/"0").
+> Parse a boolean-ish value ("true"/"yes"/"1"/"on" and the matching negatives).
 
 ```ts
 function toBool(value: string | undefined | null): boolean;
@@ -917,6 +942,22 @@ type TemplateVars = Record<string, string>;
 
 Source: [`./src/settings/config.ts`](../packages/core/src/settings/config.ts)
 
+#### `RULESET_TYPE_PREFIXES` (const)
+
+> `ruleset=` dialect prefixes (`surge:`, `quanx:`, `clash-domain:`, …).
+
+```ts
+const RULESET_TYPE_PREFIXES: ReadonlyArray<readonly [string, RulesetType]> = [
+  ["surge:", RulesetType.Surge],
+  ["quanx:", RulesetType.QuantumultX],
+  ["quantumultx:", RulesetType.QuantumultX],
+  ["clash-domain:", RulesetType.ClashDomain],
+  ["clash-ipcidr:", RulesetType.ClashIpCidr],
+  ["clash-classic:", RulesetType.ClashClassical],
+  ["clash:", RulesetType.ClashClassical],
+];
+```
+
 #### `parseCustomProxyGroup` (function)
 
 > Parse a `name`type`rule...` INI proxy-group definition.
@@ -959,6 +1000,14 @@ function parseRegexMatch(value: string, delimiter: string): RegexMatchConfig;
 
 ```ts
 function parseRulesetConfig(value: string): RulesetConfig | undefined;
+```
+
+#### `parseRulesetSource` (function)
+
+> Split a ruleset source into its dialect prefix plus the bare URL/content.
+
+```ts
+function parseRulesetSource(source: string): { url: string; type?: RulesetType };
 ```
 
 #### `ExternalConfig` (interface)
@@ -1488,6 +1537,14 @@ function explodeHttp(link: string, node: Proxy): void;
 function explodeHttpSub(link: string, node: Proxy): void;
 ```
 
+#### `explodeHysteria` (function)
+
+> Parse a `hysteria://host:port?...` (v1) link.
+
+```ts
+function explodeHysteria(link: string, node: Proxy): void;
+```
+
 #### `explodeHysteria2` (function)
 
 > Parse a `hysteria2://` / `hy2://` link.
@@ -1518,6 +1575,14 @@ function explodeQuan(quan: string, node: Proxy): void;
 
 ```ts
 function explodeShadowrocket(rocket: string, node: Proxy): void;
+```
+
+#### `explodeSnell` (function)
+
+> Parse a `snell://psk@host:port?...` link.
+
+```ts
+function explodeSnell(link: string, node: Proxy): void;
 ```
 
 #### `explodeSocks` (function)
@@ -1590,6 +1655,14 @@ function explodeVless(link: string, node: Proxy): void;
 
 ```ts
 function explodeVmess(vmess: string, node: Proxy): void;
+```
+
+#### `explodeWireguard` (function)
+
+> Parse a `wg://` / `wireguard://host:port?...` link.
+
+```ts
+function explodeWireguard(link: string, node: Proxy): void;
 ```
 
 #### `isLink` (function)
@@ -1829,7 +1902,7 @@ function convertRuleset(content: string, type: RulesetType): string;
 > Convert rulesets into an ordered list of Clash rule strings.
 
 ```ts
-function rulesetToClashRules(rulesets: RulesetContent[]): string[];
+function rulesetToClashRules(rulesets: RulesetContent[], classical = false): string[];
 ```
 
 #### `rulesetToSingBoxRules` (function)
@@ -1846,7 +1919,11 @@ function rulesetToSingBoxRules(rulesets: RulesetContent[]): SingBoxRoute;
 > Convert rulesets into Surge/QuanX/Quan/Loon rule lines.
 
 ```ts
-function rulesetToSurgeRules(rulesets: RulesetContent[], surgeVersion: number): SurgeRulesetResult;
+function rulesetToSurgeRules(
+  rulesets: RulesetContent[],
+  surgeVersion: number,
+  expand = true,
+): SurgeRulesetResult;
 ```
 
 #### `transformRuleToCommon` (function)
@@ -2182,6 +2259,15 @@ function vmessLinkConstruct(
 
 Source: [`./src/generator/nodes.ts`](../packages/core/src/generator/nodes.ts)
 
+#### `REGEX_BLACKLIST` (const)
+
+> Patterns known to blow up the regex engine (mirrors subconverter-rs
+> `REGEX_BLACK_LIST`); requests carrying them are rejected outright.
+
+```ts
+const REGEX_BLACKLIST: readonly string[] = ["(.*)*"];
+```
+
 #### `addEmoji` (function)
 
 > Prefix an emoji chosen by the emoji rules.
@@ -2268,6 +2354,14 @@ function groupGenerate(
   filteredNodeList: string[],
   addDirect: boolean,
 ): void;
+```
+
+#### `isBlacklistedPattern` (function)
+
+> `true` when `pattern` exactly matches a blacklisted catastrophic pattern.
+
+```ts
+function isBlacklistedPattern(pattern: string): boolean;
 ```
 
 #### `matchRange` (function)
@@ -2377,7 +2471,7 @@ Builds from: [`packages/node/src/index.ts`](../packages/node/src/index.ts).
 
 Modules:
 
-- [`(entry point)`](#subconverternode-entry-point): `LoadOptions`, `MAX_FETCH_BYTES`, `readCappedText`, `fetchSubscription`, `readSubscriptionFile`, `writeOutputFile`, `SubscriptionSource`, `resolveSubscription`, `loadNodes`, `ConvertRequest`, `ConvertInput`, `detectRulesetType`, `parseRulesetSource`, `loadRuleset`, `collectRulesets`, `clearDefaultRulesetCache`, `getCachedDefaultRulesets`, `collectNodes`, `prepareConversion`, `buildCountryResolver`, `defaultRequestSettings`
+- [`(entry point)`](#subconverternode-entry-point): `LoadOptions`, `MAX_FETCH_BYTES`, `readCappedText`, `fetchSubscription`, `readSubscriptionFile`, `writeOutputFile`, `SubscriptionSource`, `resolveSubscription`, `loadNodes`, `ConvertRequest`, `ConvertInput`, `detectRulesetType`, `loadRuleset`, `collectRulesets`, `clearDefaultRulesetCache`, `getCachedDefaultRulesets`, `collectNodes`, `prepareConversion`, `buildCountryResolver`, `defaultRequestSettings`
 - [`geoip`](#subconverternode-geoip): `clearGeoIpCache`, `countryResolverFrom`, `getGeoIpDatabase`, `isHostIp`, `openGeoIpDatabase`, `resolveNodeCountries`, `GeoIpDatabase`, `ResolveCountryOptions`
 - [`server`](#subconverternode-server): `collectRequestUrls`, `contentTypeForTarget`, `convertSubRequest`, `createSubServer`, `fetchSubscriptionDetailed`, `fetchUserinfoHeader`, `splitSubscriptionUrls`, `startServer`, `ServeOptions`, `SubConversion`
 
@@ -2510,14 +2604,6 @@ Members:
 
 ```ts
 function detectRulesetType(content: string): RulesetType;
-```
-
-#### `parseRulesetSource` (function)
-
-> Resolve a ruleset source string into a URL/path plus its dialect.
-
-```ts
-function parseRulesetSource(source: string): { url: string; type?: RulesetType };
 ```
 
 #### `loadRuleset` (function)
@@ -2779,6 +2865,7 @@ Members:
 - `host` (`string`, optional) — Bind address (default `0.0.0.0` for Docker; use `127.0.0.1` locally).
 - `port` (`number`, optional) — TCP port to listen on (default `25500`).
 - `geoipPath` (`string`, optional) — Local MaxMind `.mmdb` database enabling `auto_country` (GeoIP country prefixed names). Local paths are only accepted here, never from a query.
+- `managedPrefix` (`string`, optional) — Prefix (e.g. `https://example.com/`) for Surge-family `#!MANAGED-CONFIG`.
 
 #### `SubConversion` (interface)
 

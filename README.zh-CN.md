@@ -71,7 +71,7 @@ Clash YAML → Surge INI → base64/明文链接列表）。
 
 | 协议（`ProxyType`）    | 链接格式                                       | 输入来源                                                          | 传输 / TLS 说明                                                  |
 | ---------------------- | ---------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `ss` Shadowsocks       | `ss://`                                        | 链接（SIP002、明文、`simple-obfs`/`v2ray-plugin`）                | 保留 obfs / v2ray-plugin 参数                                    |
+| `ss` Shadowsocks       | `ss://`                                        | 链接（SIP002 含 AEAD-2022 明文 userinfo、明文、`simple-obfs`/`v2ray-plugin`） | 保留 obfs / v2ray-plugin 参数 |
 | `ssr` ShadowsocksR     | `ssr://`                                       | 链接                                                              | `origin`/`plain` 的 SSR 在纯 SS 目标中可降级为 SS                |
 | `vmess` VMess          | `vmess://`、`vmess1://`                        | 链接（v2rayN JSON、Shadowrocket、Kitsunebi、Quantumult 分享格式） | `tcp`/`ws`；`tls`；`aid`/`aead`                                  |
 | `vless` VLESS          | `vless://`                                     | 链接                                                              | `tcp`/`ws`/`grpc`；`tls`/`reality`，支持 `flow`/`fp`/`pbk`/`sid` |
@@ -81,9 +81,9 @@ Clash YAML → Surge INI → base64/明文链接列表）。
 | `hysteria2` Hysteria2  | `hysteria2://`、`hy2://`                       | 链接                                                              | `password`、`sni`、速率、指纹                                    |
 | `tuic` TUIC            | `tuic://`                                      | 链接                                                              | `uuid`/`password`、拥塞控制                                      |
 | `anytls` AnyTLS        | `anytls://`                                    | 链接                                                              | `password`、`sni`                                                |
-| `wireguard` WireGuard  | —（仅配置）                                    | Clash / Surge `[WireGuard]`                                       | 密钥、`self-ip`、DNS、MTU、对端                                  |
-| `snell` Snell          | —（仅配置）                                    | Clash / Surge                                                     | `psk`、`obfs`、`version`                                         |
-| `hysteria` Hysteria v1 | —（仅配置）                                    | Clash                                                             | 旧版 `up`/`down`、obfs、auth                                     |
+| `wireguard` WireGuard  | `wg://`、`wireguard://`                           | 链接 + Clash / Surge `[WireGuard]`                                | 密钥、`self-ip`、DNS、MTU、对端                                  |
+| `snell` Snell          | `snell://`                                       | 链接 + Clash / Surge                                              | `psk`、`obfs`、`version`                                         |
+| `hysteria` Hysteria v1 | `hysteria://`                                    | 链接 + Clash                                                      | 旧版 `up`/`down`、obfs、auth                                     |
 | `Netch`                | `Netch://`                                     | 链接                                                              | Netch 分享格式                                                   |
 
 节点操作匹配器：`!!GROUP=`、`!!GROUPID=`/`!!INSERT=`、`!!TYPE=`、`!!PORT=`、
@@ -96,7 +96,10 @@ Clash YAML → Surge INI → base64/明文链接列表）。
 
 - `clash`（`clash.yaml`，`text/yaml`）——`proxies`/`proxy-groups`/`rules`；`legacy=true`
   切回 `Proxy`/`Proxy Group`/`Rule`；新字段名下输出 `dialer-proxy`；VLESS 支持
-  `flow`/`reality-opts`。不丢节点。
+  `flow`/`reality-opts`。`flavor=mihomo`（默认）/`premium`/`stash` 按内核能力剔除
+  不支持的协议与字段（`premium` 丢弃 VLESS/Hysteria/Hysteria2/TUIC/AnyTLS 并剥离
+  `client-fingerprint`/`reality-opts`；`stash` 在保留 reality 的同时丢弃 AnyTLS 与
+  指纹）。`mihomo` 下不丢节点。
 - `clashr`（`clashr.yaml`，`text/yaml`）——ClashR YAML，字段规则同 `clash`。不丢节点。
 - `surge`（`surge.conf`，`text/plain`）——Surge v2–v5（`surge_version`，默认 5）；
   proxy + proxy-group 段落、WireGuard 子段落、基础配置保留；Trojan `ws` 参数、
@@ -113,7 +116,8 @@ Clash YAML → Surge INI → base64/明文链接列表）。
 - `mellow`（`mellow.conf`，`text/plain`）——`[Endpoint]`/`[EndpointGroup]`，以及由规则集
   生成的 `[RoutingRule]`。仅保留无插件 SS、VMess、SOCKS5、HTTP。
 - `singbox`（`singbox.json`，`application/json`）——`outbounds`（selector/urltest 分组）、
-  由规则集生成的 `route.rules`/`route.final`。丢弃 SSR、Snell。
+  由规则集生成的 `route.rules`/`route.final`。丢弃 SSR（sing-box 没有 ShadowsocksR
+  实现）；Snell 需要 sing-box ≥ 1.14。
 - `v2ray`（`v2ray.txt`，`text/plain`）——base64 VMess 链接列表。丢弃非 VMess。
 - `ss`（`ss.txt`，`text/plain`）——base64 SS 链接列表（去重）；`origin`/`plain` 的 SSR
   可降级为 SS。丢弃非 SS。
@@ -138,7 +142,7 @@ Clash YAML → Surge INI → base64/明文链接列表）。
   fallback、load-balance、relay、ssid、smart）。
 - 外部配置解析（`[custom]` INI：`ruleset`、`custom_proxy_group`、`rename`、`name_regex`、
   `name_remove`、`emoji`、备注包含/排除、基础文件）以及请求查询字符串解析。
-- 由 `[template]` 变量驱动的轻量模板插值（`{{ var }}`）。
+- 由 `[template]` 变量驱动的轻量模板插值（`{{ var }}`）；`baseConf` 中的占位符在生成前替换。
 - 规则默认开启：未传 `rulesets`/`groups` 时回退到上游风格的远端默认规则
   （`@subconverter/node` 带 TTL 缓存 + 单飞请求，离线时回退内置静态规则）。传
   `no_rules` / `--no-rules`（`includeRules: false`）可整体去掉规则；
@@ -192,7 +196,12 @@ subconverter serve --port 25500 --host 0.0.0.0
 
 转换参数：`--surge-version`（默认 **5**）、`--new-field-name`（默认 **true**，
 `--new-field-name=false` 切回旧版 `Proxy`）、`--legacy`（旧版 Clash 字段名）、
+`--flavor mihomo|premium|stash`（Clash 内核能力）、`--classical`（`payload:` 列表原文输出）、
+`--no-expand`（Surge 系保留远端 `RULE-SET` 引用）、`--dev-id`（Quantumult X 设备 ID）、
 `--with-rules`（默认开启，兼容保留）/ `--no-rules`（去掉规则与默认分组）。
+
+服务参数：`--geoip <mmdb>`、`--managed-prefix <url>`（Surge 系 `#!MANAGED-CONFIG` 头前缀，
+如 `subconverter serve --managed-prefix https://ex.com/`）。
 
 ### 重命名前的名字清理
 
@@ -275,7 +284,17 @@ URL（拒绝本地路径）；`[]RULE` 内联规则集不受影响。
   `|` 分隔。
 - `group`——额外 select 分组名（可重复）。
 - `interval`（上游值）——覆盖 `profile-update-interval` 响应头。
-- `surge_version`（别名 `surge-version`、`ver`、`version`；默认 `5`）——Surge 目标版本。
+- `surge_version`（别名 `surge-version`、`ver`、`version`；默认 `5`）——Surge 目标版本；
+  注意默认值与上游 subconverter / subconverter-rs（`3`）不同。
+- `flavor`（默认 `mihomo`）——Clash 内核：`mihomo`（默认，全量输出）、`premium`
+ （丢弃 VLESS/Hysteria/Hysteria2/TUIC/AnyTLS，剥离 `client-fingerprint` 与
+  `reality-opts`）、`stash`（丢弃 AnyTLS，剥离指纹，保留 reality）。
+- `expand`（默认 `true`）——`false` 时 Surge/Surfboard 对远端规则集输出
+  `RULE-SET,url,group` 引用而不内联（Clash 恒为内联）。
+- `strict`（默认 `false`）——Surge 系 `#!MANAGED-CONFIG` 头的 `strict=`（仅 `--managed-prefix`
+  下输出）。
+- `filename`——覆盖下载（`Content-Disposition`）文件名。
+- `dev_id`（别名 `dev-id`、`device_id`、`device-id`）——Quantumult X 设备 ID。
 - `new_field_name`（别名 `new_name` 及连字符变体；默认 `true`）——Clash 新字段名；
   裸 `?flag` 视为 `true`。
 - `legacy`（别名 `legacy_field_name`、`legacy-field-name`；默认 `false`）——旧版
@@ -293,6 +312,9 @@ URL（拒绝本地路径）；`[]RULE` 内联规则集不受影响。
 - `userinfo_url`（别名 `userinfo-url`、`userinfo`）——额外流量接口（见下）。
 - `userinfo_provider`（别名 `userinfo-provider`、`userinfo_type`、`userinfo-type`；
   自动识别）——流量转换器（见下）。
+- `classical`——转换规则集时把 Clash `payload:` 列表按原文输出。
+- 黑名单 `include`/`exclude` 正则（如 `(.*)*`）直接 400 拒绝。
+- 布尔值接受 `true`/`false`、`1`/`0`、`yes`/`no`、`on`/`off`（裸 `?flag` 视为 `true`）。
 - `parseRequestSettings` 解析的其余开关（`rename`、`emoji`、`include`、`exclude`、
   `add_emoji`、`remove_emoji`、`append_type`、`sort`、`filter_deprecated`、`dedupe`、
   `tfo`、`udp`、`scv`、`tls13`、`insert`、`classical`…）均接受下划线/连字符，

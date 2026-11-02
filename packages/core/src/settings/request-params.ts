@@ -1,5 +1,6 @@
 import { parseRegexMatch } from "./config";
 import type { RequestSettings } from "../types/settings";
+import { parseClashFlavor } from "../types/settings";
 import { TargetFormat } from "../types/settings";
 import { parseTriBool, type TriBool } from "../types/tribool";
 import { toInt } from "../utils/string";
@@ -115,12 +116,16 @@ export function createRequestSettings(): RequestSettings {
     appendType: false,
     autoCountry: false,
     autoExtract: false,
+    clashFlavor: "mihomo",
     clashScript: false,
     classicalRuleset: false,
     dedupe: false,
+    devId: "",
     emoji: [],
     excludeCountries: [],
     excludeRemarks: [],
+    expand: true,
+    filename: "",
     filterDeprecated: false,
     group: [],
     includeCountries: [],
@@ -141,6 +146,7 @@ export function createRequestSettings(): RequestSettings {
     script: "",
     scv: undefined,
     sort: false,
+    strict: false,
     target: TargetFormat.Auto,
     tfo: undefined,
     tls13: undefined,
@@ -174,6 +180,11 @@ export function parseRequestSettings(query: string): RequestSettings {
   settings.filterDeprecated = boolArg(query, "filter_deprecated");
   settings.newFieldName = resolveNewFieldName(query);
   settings.classicalRuleset = boolArg(query, "classical");
+  settings.clashFlavor = parseClashFlavor(firstArg(query, "flavor"));
+  settings.expand = queryBoolFlag(query, "expand") ?? true;
+  settings.strict = boolArg(query, "strict");
+  settings.filename = firstArg(query, "filename");
+  settings.devId = firstArg(query, "dev_id", "dev-id", "device_id", "device-id");
   settings.insert = getUrlArg(query, "insert") !== "";
   settings.clashScript = boolArg(query, "clash_script");
   settings.autoExtract = boolArg(query, "auto_extract");

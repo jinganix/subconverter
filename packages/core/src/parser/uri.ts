@@ -1,8 +1,10 @@
-import { isFlattenableSsr } from "./ciphers";
+import { isFlattenableSsr, isSsCipher } from "./ciphers";
 import {
   anyTlsConstruct,
   httpConstruct,
   hysteria2Construct,
+  hysteriaConstruct,
+  snellConstruct,
   socksConstruct,
   ssConstruct,
   ssrConstruct,
@@ -10,6 +12,7 @@ import {
   tuicConstruct,
   vlessConstruct,
   vmessConstruct,
+  wireGuardConstruct,
 } from "./construct";
 import type { Proxy } from "../types/proxy";
 import { DEFAULT_GROUPS, createProxy } from "../types/proxy";
@@ -415,7 +418,14 @@ export function explodeSs(ss: string, node: Proxy): void {
     const secret = match[1] as string;
     server = match[2] as string;
     port = match[3] as string;
-    const secretMatch = firstMatch(urlSafeBase64Decode(secret), "(\\S+?):(\\S+)");
+    // SIP002 userinfo has two forms: base64("method:password") for classic
+    // ciphers, and percent-encoded plaintext `method:password` for AEAD-2022.
+    // Our base64 decoder is lossy, so disambiguate via the known ciphers.
+    const raw = urlDecode(secret);
+    const decoded = firstMatch(urlSafeBase64Decode(raw), "(\\S+?):(\\S+)");
+    const plaintext = firstMatch(raw, "(\\S+?):(\\S+)");
+    const secretMatch =
+      decoded && isSsCipher(decoded[1] as string) ? decoded : (plaintext ?? decoded);
     if (!secretMatch) {
       return;
     }
@@ -915,6 +925,163 @@ export function explodeAnyTls(link: string, node: Proxy): void {
     server: add,
     sni,
     udp: udp === "" ? undefined : parseTri(udp),
+  });
+}
+
+/** Parse a `snell://psk@host:port?...` link. */
+export function explodeSnell(link: string, node: Proxy): void {
+  let body = link.slice(8);
+  let remark = "";
+  let addition = "";
+  const hashPos = body.lastIndexOf("#");
+  if (hashPos !== -1) {
+    remark = urlDecode(body.slice(hashPos + 1));
+    body = body.slice(0, hashPos);
+  }
+  const qpos = body.lastIndexOf("?");
+  if (qpos !== -1) {
+    addition = body.slice(qpos + 1);
+    body = body.slice(0, qpos);
+  }
+  const match = /^(.*?)@(.*)[:](\d+)$/.exec(body);
+  if (!match) {
+    return;
+  }
+  const password = match[1] as string;
+  const server = match[2] as string;
+  const port = match[3] as string;
+  if (password === "" || port === "" || port === "0") {
+    return;
+  }
+  const obfs = getUrlArg(addition, "obfs");
+  const host = getUrlArg(addition, "host");
+  const version = getUrlArg(addition, "version");
+  const udp = getUrlArg(addition, "udp");
+  const tfo = getUrlArg(addition, "tfo");
+  const scv = getUrlArg(addition, "skip-cert-verify");
+  if (remark === "") {
+    remark = `${server}:${port}`;
+  }
+  snellConstruct(node, {
+    group: DEFAULT_GROUPS.snell,
+    host,
+    obfs: obfs === "" ? "none" : obfs,
+    password,
+    port,
+    remark,
+    scv: scv === "" ? undefined : parseTri(scv),
+    server,
+    tfo: tfo === "" ? undefined : parseTri(tfo),
+    udp: udp === "" ? undefined : parseTri(udp),
+    version: version === "" ? 1 : toInt(version),
+  });
+}
+
+/** Parse a `hysteria://host:port?...` (v1) link. */
+export function explodeHysteria(link: string, node: Proxy): void {
+  let body = link.slice(11);
+  let remark = "";
+  let addition = "";
+  const hashPos = body.lastIndexOf("#");
+  if (hashPos !== -1) {
+    remark = urlDecode(body.slice(hashPos + 1));
+    body = body.slice(0, hashPos);
+  }
+  const qpos = body.lastIndexOf("?");
+  if (qpos !== -1) {
+    addition = body.slice(qpos + 1);
+    body = body.slice(0, qpos);
+  }
+  const match = /^(.*)[:](\d+)$/.exec(body);
+  if (!match) {
+    return;
+  }
+  const server = match[1] as string;
+  const port = match[2] as string;
+  if (server === "" || port === "0") {
+    return;
+  }
+  const auth = getUrlArg(addition, "auth");
+  const protocol = getUrlArg(addition, "protocol");
+  const upSpeed = getUrlArg(addition, "upmbps");
+  const downSpeed = getUrlArg(addition, "downmbps");
+  const alpn = getUrlArg(addition, "alpn");
+  const obfs = getUrlArg(addition, "obfs");
+  const obfsProtocol = getUrlArg(addition, "obfsParam");
+  const sni = getUrlArg(addition, "peer");
+  const insecure = getUrlArg(addition, "insecure");
+  if (remark === "") {
+    remark = `${server}:${port}`;
+  }
+  hysteriaConstruct(node, {
+    alpn,
+    authStr: auth,
+    downSpeed,
+    group: DEFAULT_GROUPS.hysteria,
+    obfs,
+    obfsProtocol,
+    port,
+    protocol: protocol === "" ? "udp" : protocol,
+    remark,
+    scv: insecure === "" ? undefined : parseTri(insecure),
+    server,
+    sni: sni === "" ? server : sni,
+    upSpeed,
+  });
+}
+
+/** Parse a `wg://` / `wireguard://host:port?...` link. */
+export function explodeWireguard(link: string, node: Proxy): void {
+  const normalized = link.replace(/^(wg|wireguard):\/\//, "wireguard://");
+  let body = normalized.slice(13);
+  let remark = "";
+  let addition = "";
+  const hashPos = body.lastIndexOf("#");
+  if (hashPos !== -1) {
+    remark = urlDecode(body.slice(hashPos + 1));
+    body = body.slice(0, hashPos);
+  }
+  const qpos = body.lastIndexOf("?");
+  if (qpos !== -1) {
+    addition = body.slice(qpos + 1);
+    body = body.slice(0, qpos);
+  }
+  const match = /^(?:(.*)@)?\[?(.*?)]?:(\d+)$/.exec(body);
+  if (!match) {
+    return;
+  }
+  const server = match[2] as string;
+  const port = match[3] as string;
+  if (server === "" || port === "0") {
+    return;
+  }
+  const privateKey = getUrlArg(addition, "privateKey") || getUrlArg(addition, "privatekey");
+  const publicKey = getUrlArg(addition, "publicKey") || getUrlArg(addition, "publickey");
+  if (privateKey === "" || publicKey === "") {
+    return;
+  }
+  const presharedKey = getUrlArg(addition, "presharedKey");
+  const selfIp = getUrlArg(addition, "selfIP");
+  const selfIpv6 = getUrlArg(addition, "selfIPv6");
+  const mtu = getUrlArg(addition, "mtu");
+  const keepAlive = getUrlArg(addition, "keepAlive");
+  const dns = getUrlArg(addition, "dns");
+  if (remark === "") {
+    remark = `${server}:${port}`;
+  }
+  wireGuardConstruct(node, {
+    dnsServers: dns === "" ? ["1.1.1.1"] : dns.split(",").map((s) => s.trim()),
+    group: DEFAULT_GROUPS.wireguard,
+    keepAlive: keepAlive === "" ? 25 : toInt(keepAlive),
+    mtu: mtu === "" ? 1420 : toInt(mtu),
+    port,
+    preSharedKey: presharedKey,
+    privateKey,
+    publicKey,
+    remark,
+    selfIp: selfIp === "" ? "10.0.0.2" : selfIp,
+    selfIpv6,
+    server,
   });
 }
 

@@ -107,9 +107,24 @@ function buildOutbound(
       proxy = out;
       break;
     }
-    // sing-box has no SSR support — drop such nodes.
+    // sing-box has no ShadowsocksR implementation (configs using it fail
+    // at startup), so such nodes are dropped.
     case ProxyType.ShadowsocksR:
       return undefined;
+    case ProxyType.Snell: {
+      const out: Record<string, unknown> = { ...common, psk: x.password, type: "snell" };
+      if (x.snellVersion) {
+        out.version = x.snellVersion;
+      }
+      if (x.obfs !== "" && x.obfs !== "none") {
+        out.obfs_mode = x.obfs;
+      }
+      if (x.host !== "") {
+        out.obfs_host = x.host;
+      }
+      proxy = out;
+      break;
+    }
     case ProxyType.VMess: {
       const out: Record<string, unknown> = {
         ...common,

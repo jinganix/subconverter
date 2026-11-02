@@ -1,3 +1,4 @@
+import { parseRulesetSource } from "../settings/config";
 import type { RulesetContent, RulesetType } from "../types/ruleset";
 import { RulesetType as RulesetTypeEnum } from "../types/ruleset";
 
@@ -182,7 +183,7 @@ function collectRuleLines(content: string, group: string, noResolveOnly: boolean
 }
 
 /** Convert rulesets into an ordered list of Clash rule strings. */
-export function rulesetToClashRules(rulesets: RulesetContent[]): string[] {
+export function rulesetToClashRules(rulesets: RulesetContent[], classical = false): string[] {
   const rules: string[] = [];
   for (const ruleset of rulesets) {
     const content = ruleset.content;
@@ -198,7 +199,12 @@ export function rulesetToClashRules(rulesets: RulesetContent[]): string[] {
       rules.push(transformRuleToCommon(line, group));
       continue;
     }
-    const converted = convertRuleset(content, ruleset.ruleType);
+    const converted = convertRuleset(
+      content,
+      classical && /^payload:\r?\n/.test(content)
+        ? RulesetTypeEnum.ClashClassical
+        : ruleset.ruleType,
+    );
     for (const rawLine of converted.split(/\r?\n/)) {
       let line = rawLine.trim();
       if (!isRuleLine(line)) {
@@ -225,6 +231,7 @@ export interface SurgeRulesetResult {
 export function rulesetToSurgeRules(
   rulesets: RulesetContent[],
   surgeVersion: number,
+  expand = true,
 ): SurgeRulesetResult {
   let section: string;
   let allowed: string[];
@@ -263,6 +270,18 @@ export function rulesetToSurgeRules(
       continue;
     }
     const group = ruleset.ruleGroup;
+    if (!expand && (surgeVersion > 2 || surgeVersion === -3)) {
+      // Keep the remote reference so the client fetches the list itself.
+      const { url } = parseRulesetSource(ruleset.rulePath);
+      if (/^https?:\/\//i.test(url.trim()) && !ruleset.content.startsWith("[]")) {
+        let line = `RULE-SET,${url.trim()},${group}`;
+        if (ruleset.updateInterval > 0) {
+          line += `,update-interval=${ruleset.updateInterval}`;
+        }
+        lines.push(line);
+        continue;
+      }
+    }
     if (ruleset.content.startsWith("[]")) {
       let line = ruleset.content.slice(2);
       if (line === "MATCH") {

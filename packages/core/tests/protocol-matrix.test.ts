@@ -21,6 +21,8 @@ const LINKS: Record<string, string> = {
   anytls: "anytls://pw@8.8.8.8:443?sni=h.example.com#AT",
   httpSub: "http://dXNlcjpwYXNzQDEwLjAuMC4xOjgwODA=#HTTP-SUB",
   hy2: "hysteria2://pw@7.7.7.7:443?sni=h.example.com&up=50&down=100#HY2",
+  hysteria: "hysteria://10.0.0.2:443?auth=secret&peer=sni.example.com#HY",
+  snell: "snell://psk123@10.0.0.1:8388?obfs=tls&version=2#SNELL",
   socks: "tg://socks?server=10.10.10.1&port=1080&user=u&pass=p&remarks=SOCKS",
   ssObfs:
     "ss://YWVzLTI1Ni1nY206cHc=@1.1.1.2:8388?plugin=obfs-local%3Bobfs%3Dhttp%3Bobfs-host%3Dwww.bing.com#SS-OBFS",
@@ -35,6 +37,7 @@ const LINKS: Record<string, string> = {
   vlessWsTls:
     "vless://b831381d-6324-4d53-ad4f-8cda48b30811@5.5.5.5:443?encryption=none&security=tls&sni=h.example.com&type=ws&host=h.example.com&path=%2Fp#VLESS-WS",
   vmessStd: "vmess://tcp+tls:b831381d-6324-4d53-ad4f-8cda48b30811-0@4.4.4.4:443#VMESS-STD",
+  wireguard: "wireguard://10.0.0.3:51820?privateKey=PRIV&publicKey=PUB#WG",
 };
 
 describe("input formats: every documented link type parses", () => {

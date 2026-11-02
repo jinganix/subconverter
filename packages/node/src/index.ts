@@ -12,6 +12,7 @@ import {
   getDefaultProxyGroups,
   getDefaultRulesetConfigs,
   getDefaultRulesets,
+  parseRulesetSource,
   parseSubscription,
 } from "@subconverter/core";
 import { readFile, writeFile } from "node:fs/promises";
@@ -164,16 +165,6 @@ export interface ConvertInput {
   includeRules?: boolean;
 }
 
-const RULESET_TYPE_PREFIXES: Array<[string, RulesetType]> = [
-  ["surge:", RulesetType.Surge],
-  ["quanx:", RulesetType.QuantumultX],
-  ["quantumultx:", RulesetType.QuantumultX],
-  ["clash-domain:", RulesetType.ClashDomain],
-  ["clash-ipcidr:", RulesetType.ClashIpCidr],
-  ["clash-classic:", RulesetType.ClashClassical],
-  ["clash:", RulesetType.ClashClassical],
-];
-
 /** Infer a ruleset dialect from content when no explicit hint is given. */
 export function detectRulesetType(content: string): RulesetType {
   if (/^payload:\r?\n/.test(content.trim())) {
@@ -195,14 +186,7 @@ export function detectRulesetType(content: string): RulesetType {
 }
 
 /** Resolve a ruleset source string into a URL/path plus its dialect. */
-export function parseRulesetSource(source: string): { url: string; type?: RulesetType } {
-  for (const [prefix, type] of RULESET_TYPE_PREFIXES) {
-    if (source.toLowerCase().startsWith(prefix)) {
-      return { type, url: source.slice(prefix.length) };
-    }
-  }
-  return { url: source };
-}
+export { parseRulesetSource } from "@subconverter/core";
 
 /** Fetch or read a ruleset body and normalize it into a {@link RulesetContent}. */
 export async function loadRuleset(

@@ -15,6 +15,17 @@ function regFind(value: string, pattern: string): boolean {
   return toRegex(pattern).test(value);
 }
 
+/**
+ * Patterns known to blow up the regex engine (mirrors subconverter-rs
+ * `REGEX_BLACK_LIST`); requests carrying them are rejected outright.
+ */
+export const REGEX_BLACKLIST: readonly string[] = ["(.*)*"];
+
+/** `true` when `pattern` exactly matches a blacklisted catastrophic pattern. */
+export function isBlacklistedPattern(pattern: string): boolean {
+  return REGEX_BLACKLIST.includes(pattern);
+}
+
 function regMatch(value: string, pattern: string): boolean {
   const match = toRegex(pattern).exec(value);
   return match !== null && match[0] === value;

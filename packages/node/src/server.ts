@@ -14,6 +14,7 @@ import {
   getDefaultProxyGroups,
   getUrlArg,
   inferUserinfoProviderFromUrl,
+  isBlacklistedPattern,
   parseExternalConfig,
   parseRulesetConfig,
   parseRequestSettings,
@@ -43,11 +44,20 @@ export interface ServeOptions {
    * prefixed names). Local paths are only accepted here, never from a query.
    */
   geoipPath?: string;
+  /**
+   * Prefix (e.g. `https://example.com/`) for Surge-family `#!MANAGED-CONFIG`.
+   */
+  managedPrefix?: string;
 }
 
 /** Options shared by the server conversion helpers. */
 export interface SubServerOptions {
   geoipPath?: string;
+  /**
+   * Prefix (e.g. `https://example.com/`) prepended to the `#!MANAGED-CONFIG`
+   * URL for Surge-family targets, mirroring upstream `managed_config_prefix`.
+   */
+  managedPrefix?: string;
 }
 
 /** Result of converting one `/sub` HTTP request. */
@@ -523,6 +533,7 @@ function toExtraSettings(request: RequestSettings, rawQuery: string): ExtraSetti
     appendProxyType: request.appendType,
     autoCountry: request.autoCountry,
     clashClassicalRuleset: request.classicalRuleset,
+    clashFlavor: request.clashFlavor,
     clashNewFieldName: request.newFieldName,
     clashProxiesStyle: request.proxiesStyle || "flow",
     clashProxyGroupsStyle: request.proxyGroupsStyle || "flow",
@@ -531,12 +542,14 @@ function toExtraSettings(request: RequestSettings, rawQuery: string): ExtraSetti
     emojiArray: request.emoji,
     excludeCountries: request.excludeCountries,
     excludeRemarks: request.excludeRemarks,
+    expandRulesets: request.expand,
     filterDeprecated: request.filterDeprecated,
     includeCountries: request.includeCountries,
     includeRemarks: request.includeRemarks,
     nameRegexArray: request.nameRegex,
     nameRemove: request.nameRemove,
     nodeList: request.nodeList,
+    quanxDevId: request.devId,
     removeEmoji: request.removeEmoji,
     renameArray: request.rename,
     skipCertVerify: request.scv,
@@ -632,6 +645,12 @@ export async function convertSubRequest(
   // `parseRequestSettings` plus the `raw*` helpers below share `getUrlArg`
   // decoding/precedence); `_searchParams` is kept for signature compat.
   const request = parseRequestSettings(rawQuery);
+  if (
+    request.includeRemarks.some(isBlacklistedPattern) ||
+    request.excludeRemarks.some(isBlacklistedPattern)
+  ) {
+    throw Object.assign(new Error("Invalid regex in request!"), { statusCode: 400 });
+  }
 
   const targetParam = rawFirst(rawQuery, "target").trim().toLowerCase();
   const target = targetParam === "" ? "clash" : targetParam;
@@ -723,6 +742,7 @@ export async function convertSubRequest(
     isServerRulesetUrl(config.url),
   );
   const configParam = rawFirst(rawQuery, "config");
+  let templateVars: Record<string, string> = {};
   if (configParam !== "" && !configParam.startsWith("[]")) {
     try {
       const raw = await loadExternalConfig(configParam);
@@ -756,6 +776,7 @@ export async function convertSubRequest(
         if (external.autoCountry) {
           request.autoCountry = true;
         }
+        templateVars = { ...external.templateVars };
       }
     } catch (error) {
       failures.push(`config: ${error instanceof Error ? error.message : String(error)}`);
@@ -774,6 +795,7 @@ export async function convertSubRequest(
   // `toExtraSettings` already carries the merged `request.rename`/`emoji`
   // (including external-config entries pushed above); do not append again.
   const settings = toExtraSettings(request, rawQuery);
+  settings.templateVars = templateVars;
   // A configured database turns country prefixes on by default, so mounting a
   // `.mmdb` is enough to get `US-server1`; `auto_country=false` opts out.
   // Country filters (`include_country`/`exclude_country`) also need the
@@ -834,7 +856,7 @@ export async function convertSubRequest(
     }
   }
 
-  const body = generate(nodes, {
+  const generatedBody = generate(nodes, {
     baseConf,
     groups: resolvedGroups,
     includeRules,
@@ -843,6 +865,13 @@ export async function convertSubRequest(
     surgeVersion,
     target: target as TargetFormat,
   });
+  let finalBody = generatedBody;
+  if ((target === "surge" || target === "surfboard") && options.managedPrefix) {
+    const interval = request.interval > 0 ? request.interval : 86400;
+    finalBody =
+      `#!MANAGED-CONFIG ${options.managedPrefix}sub?target=${target}&url=${urls.join("|")}` +
+      ` interval=${String(interval)} strict=${request.strict ? "true" : "false"}\n\n${generatedBody}`;
+  }
   if (nodes.length === 0) {
     throw Object.assign(new Error("No proxy nodes left after include/exclude filtering."), {
       statusCode: 400,
@@ -877,10 +906,14 @@ export async function convertSubRequest(
   }
 
   const profileUpdateInterval = request.interval > 0 ? String(request.interval) : upstreamInterval;
+  const filename =
+    request.filename !== ""
+      ? request.filename.replace(/["\r\n]/g, "")
+      : (TARGET_FILENAMES[target] ?? `subconverter.${target}.txt`);
   return {
-    body,
+    body: finalBody,
     contentType: contentTypeForTarget(target),
-    filename: TARGET_FILENAMES[target] ?? `subconverter.${target}.txt`,
+    filename,
     profileUpdateInterval,
     userinfo,
   };
@@ -954,7 +987,10 @@ async function handleSubRequest(
 export async function startServer(options: ServeOptions = {}): Promise<Server> {
   const port = options.port ?? 25500;
   const host = options.host ?? "0.0.0.0";
-  const server = createSubServer({ geoipPath: options.geoipPath });
+  const server = createSubServer({
+    geoipPath: options.geoipPath,
+    managedPrefix: options.managedPrefix,
+  });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, host, () => {

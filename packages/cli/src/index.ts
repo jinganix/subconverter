@@ -7,6 +7,7 @@ import {
   TargetFormat,
   createSelectGroup,
   generate,
+  parseClashFlavor,
   parseExternalConfig,
   parseLink,
   parseRulesetConfig,
@@ -237,6 +238,10 @@ Convert options:
       --append-type     Prefix node names with their proxy type
       --node-list       Emit a bare node list (no groups/wrapper)
       --sort            Sort nodes by name
+      --flavor <k>      Clash kernel: mihomo (default), premium, or stash
+      --classical       Emit Clash-rule-compatible payload lists verbatim
+      --no-expand       Keep remote rulesets as RULE-SET references (Surge-family)
+      --dev-id <id>     Quantumult X device ID for remote-script signatures
       --new-field-name  Use Clash's new field names (proxies/proxy-groups, default true; use --new-field-name=false for legacy Proxy keys)
       --legacy          Use legacy Clash field names (Proxy/Proxy Group/Rule)
       --dedupe          Drop duplicate nodes (same type/server/port/name)
@@ -251,6 +256,7 @@ Serve options:
   -p, --port <n>      HTTP port for serve (default 25500, env PORT)
   -H, --host <addr>   Bind address for serve (default 0.0.0.0, env HOST)
       --geoip <mmdb>    GeoLite2/GeoIP2 database enabling auto_country
+      --managed-prefix <url> Prefix for Surge-family MANAGED-CONFIG lines
                       Example: /sub?target=clash&url=<sub-url>
                                &userinfo_url=<quota-url>&userinfo_provider=jms
   -h, --help            Show this help
@@ -303,6 +309,7 @@ async function runServe(state: ArgState): Promise<number> {
     const server = await startServer({
       geoipPath: geoipPath && geoipPath !== "true" ? geoipPath : undefined,
       host,
+      managedPrefix: flag(state, "managed-prefix"),
       port,
     });
     const shutdown = (): void => {
@@ -388,6 +395,8 @@ async function runConvert(state: ArgState): Promise<number> {
     autoCountry: state.flags.has("auto-country")
       ? flagBool(state, "auto-country")
       : flag(state, "geoip") !== undefined,
+    clashClassicalRuleset: flagBool(state, "classical"),
+    clashFlavor: parseClashFlavor(flag(state, "flavor")),
     clashNewFieldName: resolveClashNewFieldName(state),
     dedupe: flagBool(state, "dedupe"),
     emojiArray: parseEmojiRules(flagAll(state, "emoji")),
@@ -396,6 +405,7 @@ async function runConvert(state: ArgState): Promise<number> {
       ...flagAll(state, "exclude_country"),
     ]).map((code) => code.toUpperCase()),
     excludeRemarks: [],
+    expandRulesets: !flagBool(state, "no-expand"),
     filterDeprecated: flagBool(state, "filter-deprecated"),
     includeCountries: parseNameRemove([
       ...flagAll(state, "include-country"),
@@ -411,6 +421,7 @@ async function runConvert(state: ArgState): Promise<number> {
       ...flagAll(state, "name_remove"),
     ]),
     nodeList: flagBool(state, "node-list"),
+    quanxDevId: flag(state, "dev-id") ?? "",
     removeEmoji: flagBool(state, "remove-emoji"),
     renameArray: parseRenameRules(flagAll(state, "rename")),
     sortFlag: flagBool(state, "sort"),
@@ -467,6 +478,7 @@ async function runConvert(state: ArgState): Promise<number> {
     }
     settings.enableRuleGenerator = external.enableRuleGenerator;
     settings.overwriteOriginalRules = external.overwriteOriginalRules;
+    settings.templateVars = { ...external.templateVars };
     if (external.addEmoji) {
       settings.addEmoji = true;
     }

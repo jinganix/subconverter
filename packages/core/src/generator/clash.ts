@@ -4,7 +4,7 @@ import { groupGenerate, processRemark } from "./nodes";
 import type { Proxy } from "../types/proxy";
 import { ProxyType, proxyTypeName } from "../types/proxy";
 import type { ProxyGroupConfig } from "../types/proxy-group";
-import type { ExtraSettings } from "../types/settings";
+import type { ClashFlavor, ExtraSettings } from "../types/settings";
 import { base64Encode } from "../utils/base64";
 import { getUrlArg, urlDecode } from "../utils/url";
 
@@ -47,6 +47,64 @@ function toTri(value: boolean | undefined): boolean | undefined {
   return value;
 }
 
+/** What a Clash-family kernel accepts; node/field drops follow this matrix. */
+interface ClashCapabilities {
+  /** Protocols the kernel can load; other nodes are dropped entirely. */
+  protocols: ReadonlySet<ProxyType>;
+  /** Whether uTLS `fingerprint` / `client-fingerprint` is understood. */
+  clientFingerprint: boolean;
+  /** Whether `reality-opts` is understood (reality nodes are dropped without it). */
+  reality: boolean;
+}
+
+const MIHOMO_PROTOCOLS: ReadonlySet<ProxyType> = new Set([
+  ProxyType.Shadowsocks,
+  ProxyType.ShadowsocksR,
+  ProxyType.VMess,
+  ProxyType.Trojan,
+  ProxyType.Snell,
+  ProxyType.HTTP,
+  ProxyType.HTTPS,
+  ProxyType.SOCKS5,
+  ProxyType.WireGuard,
+  ProxyType.Hysteria,
+  ProxyType.Hysteria2,
+  ProxyType.VLESS,
+  ProxyType.AnyTLS,
+  ProxyType.TUIC,
+]);
+
+const PREMIUM_PROTOCOLS: ReadonlySet<ProxyType> = new Set([
+  ProxyType.Shadowsocks,
+  ProxyType.ShadowsocksR,
+  ProxyType.VMess,
+  ProxyType.Trojan,
+  ProxyType.Snell,
+  ProxyType.HTTP,
+  ProxyType.HTTPS,
+  ProxyType.SOCKS5,
+  ProxyType.WireGuard,
+]);
+
+const STASH_PROTOCOLS: ReadonlySet<ProxyType> = new Set([
+  ...PREMIUM_PROTOCOLS,
+  ProxyType.Hysteria,
+  ProxyType.Hysteria2,
+  ProxyType.VLESS,
+  ProxyType.TUIC,
+]);
+
+/** Capability matrix per Clash kernel flavor (mirrors subconverter-rs). */
+function clashCapabilities(flavor: ClashFlavor): ClashCapabilities {
+  if (flavor === "premium") {
+    return { clientFingerprint: false, protocols: PREMIUM_PROTOCOLS, reality: false };
+  }
+  if (flavor === "stash") {
+    return { clientFingerprint: false, protocols: STASH_PROTOCOLS, reality: true };
+  }
+  return { clientFingerprint: true, protocols: MIHOMO_PROTOCOLS, reality: true };
+}
+
 function buildClashProxy(
   x: Proxy,
   settings: ExtraSettings,
@@ -60,6 +118,10 @@ function buildClashProxy(
     port: x.port,
     server: stripBrackets(x.hostname),
   };
+  const caps = clashCapabilities(settings.clashFlavor);
+  if (!caps.protocols.has(x.type)) {
+    return undefined;
+  }
 
   switch (x.type) {
     case ProxyType.Shadowsocks: {
@@ -314,7 +376,7 @@ function buildClashProxy(
       if (skipCertVerify !== undefined) {
         proxy["skip-cert-verify"] = skipCertVerify;
       }
-      if (x.fingerprint !== "") {
+      if (x.fingerprint !== "" && caps.clientFingerprint) {
         proxy.fingerprint = x.fingerprint;
       }
       if (x.alpn.length > 0) {
@@ -369,7 +431,7 @@ function buildClashProxy(
       if (skipCertVerify !== undefined) {
         proxy["skip-cert-verify"] = skipCertVerify;
       }
-      if (x.fingerprint !== "") {
+      if (x.fingerprint !== "" && caps.clientFingerprint) {
         proxy.fingerprint = x.fingerprint;
       }
       if (x.alpn.length > 0) {
@@ -408,10 +470,14 @@ function buildClashProxy(
       if (x.serverName !== "") {
         proxy.servername = x.serverName;
       }
-      if (x.fingerprint !== "") {
+      if (x.fingerprint !== "" && caps.clientFingerprint) {
         proxy["client-fingerprint"] = x.fingerprint;
       }
       if (x.publicKey !== "" || x.shortId !== "") {
+        // Kernels without reality-opts cannot use reality nodes at all.
+        if (!caps.reality) {
+          return undefined;
+        }
         const realityOpts: Record<string, unknown> = {};
         if (x.publicKey !== "") {
           realityOpts["public-key"] = x.publicKey;

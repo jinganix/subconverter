@@ -24,13 +24,13 @@ export function toInt(value: string | number | undefined | null): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-/** Parse a boolean-ish value ("true"/"false"/"1"/"0"). */
+/** Parse a boolean-ish value ("true"/"yes"/"1"/"on" and the matching negatives). */
 export function toBool(value: string | undefined | null): boolean {
   if (value === undefined || value === null) {
     return false;
   }
   const normalized = value.trim().toLowerCase();
-  return normalized === "true" || normalized === "1";
+  return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on";
 }
 
 /** `true` when `needle` occurs in `haystack`. */

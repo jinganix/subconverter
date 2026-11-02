@@ -3,6 +3,29 @@ import type { ProxyGroupConfig } from "./proxy-group";
 import type { RulesetConfig } from "./ruleset";
 import type { TriBool } from "./tribool";
 
+/** Clash kernel flavor targeted by Clash output (`flavor=`). */
+export type ClashFlavor = "mihomo" | "premium" | "stash";
+
+/**
+ * Parse a `flavor=` value (case-insensitive); unknown values fall back to
+ * `mihomo`, mirroring subconverter-rs `ClashFlavor::from_str`.
+ */
+export function parseClashFlavor(value: string | undefined | null): ClashFlavor {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (
+    normalized === "premium" ||
+    normalized === "original" ||
+    normalized === "classic" ||
+    normalized === "clash"
+  ) {
+    return "premium";
+  }
+  if (normalized === "stash") {
+    return "stash";
+  }
+  return "mihomo";
+}
+
 /** A regex/script rewrite rule, mirroring `RegexMatchConfig`. */
 export interface RegexMatchConfig {
   match: string;
@@ -60,6 +83,8 @@ export interface ExtraSettings {
   includeRemarks: string[];
   /** Drop nodes matching one of these remark rules. */
   excludeRemarks: string[];
+  /** `false` keeps remote rulesets as `RULE-SET` references (Surge-family). */
+  expandRulesets: boolean;
   appendProxyType: boolean;
   nodeList: boolean;
   sortFlag: boolean;
@@ -67,6 +92,10 @@ export interface ExtraSettings {
   clashNewFieldName: boolean;
   clashScript: boolean;
   clashClassicalRuleset: boolean;
+  /** Target Clash kernel: dropped protocols/fields follow its capabilities. */
+  clashFlavor: ClashFlavor;
+  /** Template variables applied to `{{ var }}` placeholders in base configs. */
+  templateVars: Record<string, string>;
   dedupe: boolean;
   surgeSsrPath: string;
   managedConfigPrefix: string;
@@ -89,6 +118,7 @@ export function createExtraSettings(): ExtraSettings {
     authorized: false,
     autoCountry: false,
     clashClassicalRuleset: false,
+    clashFlavor: "mihomo",
     clashNewFieldName: true,
     clashProxiesStyle: "flow",
     clashProxyGroupsStyle: "flow",
@@ -99,6 +129,7 @@ export function createExtraSettings(): ExtraSettings {
     enableRuleGenerator: true,
     excludeCountries: [],
     excludeRemarks: [],
+    expandRulesets: true,
     filterDeprecated: false,
     includeCountries: [],
     includeRemarks: [],
@@ -114,6 +145,7 @@ export function createExtraSettings(): ExtraSettings {
     sortFlag: false,
     sortScript: "",
     surgeSsrPath: "",
+    templateVars: {},
     tfo: undefined,
     tls13: undefined,
     udp: undefined,
@@ -153,6 +185,16 @@ export interface RequestSettings {
   tls13: TriBool;
   newFieldName: boolean;
   classicalRuleset: boolean;
+  /** Target Clash kernel (`flavor=`): mihomo (default), premium, or stash. */
+  clashFlavor: ClashFlavor;
+  /** `false` keeps remote rulesets as `RULE-SET` references (Surge-family). */
+  expand: boolean;
+  /** Managed-config `strict=` flag for Surge-family `#!MANAGED-CONFIG`. */
+  strict: boolean;
+  /** Download filename override (`filename=`). */
+  filename: string;
+  /** Quantumult X device ID for remote-script signatures (`dev_id=`). */
+  devId: string;
   insert: boolean;
   mixin: string;
   interval: number;

@@ -16,6 +16,8 @@ export {
 export {
   TargetFormat,
   createExtraSettings,
+  parseClashFlavor,
+  type ClashFlavor,
   type ExtraSettings,
   type RegexMatchConfig,
   type RequestSettings,
@@ -77,11 +79,13 @@ export {
   type TemplateVars,
 } from "./utils/template";
 export {
+  RULESET_TYPE_PREFIXES,
   parseCustomProxyGroup,
   parseExternalConfig,
   parseGroupTimes,
   parseRegexMatch,
   parseRulesetConfig,
+  parseRulesetSource,
   type ExternalConfig,
 } from "./settings/config";
 export {
@@ -137,10 +141,12 @@ export {
   explodeAnyTls,
   explodeHttp,
   explodeHttpSub,
+  explodeHysteria,
   explodeHysteria2,
   explodeKitsunebi,
   explodeQuan,
   explodeShadowrocket,
+  explodeSnell,
   explodeSocks,
   explodeSs,
   explodeSsd,
@@ -150,6 +156,7 @@ export {
   explodeTuic,
   explodeVless,
   explodeVmess,
+  explodeWireguard,
   isLink,
 } from "./parser/uri";
 
@@ -192,6 +199,7 @@ export {
   vmessLinkConstruct,
 } from "./generator/links";
 export {
+  REGEX_BLACKLIST,
   addEmoji,
   addCountryPrefix,
   applyMatcher,
@@ -200,6 +208,7 @@ export {
   filterNodes,
   filterNodesByCountry,
   groupGenerate,
+  isBlacklistedPattern,
   matchRange,
   nodeNameRegex,
   nodeNameRemove,

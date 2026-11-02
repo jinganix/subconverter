@@ -73,7 +73,7 @@ scheme) come from Clash/Surge parsers.
 
 | Protocol (`ProxyType`) | Link scheme                                      | Input source                                                          | Transports / TLS notes                                          |
 | ---------------------- | ------------------------------------------------ | --------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `ss` Shadowsocks       | `ss://`                                          | link (SIP002, plain, `simple-obfs`/`v2ray-plugin`)                    | obfs / v2ray-plugin options kept                                |
+| `ss` Shadowsocks       | `ss://`                                          | link (SIP002 incl. AEAD-2022 plaintext userinfo, plain, `simple-obfs`/`v2ray-plugin`) | obfs / v2ray-plugin options kept |
 | `ssr` ShadowsocksR     | `ssr://`                                         | link                                                                  | `origin`/`plain` SSR flattens to SS for SS-only targets         |
 | `vmess` VMess          | `vmess://`, `vmess1://`                          | link (v2rayN JSON, Shadowrocket, Kitsunebi, Quantumult share formats) | `tcp`/`ws`; `tls`; `aid`/`aead`                                 |
 | `vless` VLESS          | `vless://`                                       | link                                                                  | `tcp`/`ws`/`grpc`; `tls`/`reality` with `flow`/`fp`/`pbk`/`sid` |
@@ -83,9 +83,9 @@ scheme) come from Clash/Surge parsers.
 | `hysteria2` Hysteria2  | `hysteria2://`, `hy2://`                         | link                                                                  | `password`, `sni`, speeds, fingerprint                          |
 | `tuic` TUIC            | `tuic://`                                        | link                                                                  | `uuid`/`password`, congestion control                           |
 | `anytls` AnyTLS        | `anytls://`                                      | link                                                                  | `password`, `sni`                                               |
-| `wireguard` WireGuard  | — (config only)                                  | Clash / Surge `[WireGuard]`                                           | keys, `self-ip`, DNS, MTU, peers                                |
-| `snell` Snell          | — (config only)                                  | Clash / Surge                                                         | `psk`, `obfs`, `version`                                        |
-| `hysteria` Hysteria v1 | — (config only)                                  | Clash                                                                 | legacy `up`/`down`, obfs, auth                                  |
+| `wireguard` WireGuard  | `wg://`, `wireguard://`                          | link + Clash / Surge `[WireGuard]`                                    | keys, `self-ip`, DNS, MTU, peers                                |
+| `snell` Snell          | `snell://`                                       | link + Clash / Surge                                                  | `psk`, `obfs`, `version`                                        |
+| `hysteria` Hysteria v1 | `hysteria://`                                    | link + Clash                                                          | legacy `up`/`down`, obfs, auth                                  |
 | `Netch`                | `Netch://`                                       | link                                                                  | Netch share format                                              |
 
 Node manipulation matchers: `!!GROUP=`, `!!GROUPID=`/`!!INSERT=`, `!!TYPE=`,
@@ -99,7 +99,10 @@ types the target silently drops.
 
 - `clash` (`clash.yaml`, `text/yaml`) — `proxies`/`proxy-groups`/`rules`; `legacy=true`
   restores `Proxy`/`Proxy Group`/`Rule`; `dialer-proxy` under the new field names; VLESS
-  `flow`/`reality-opts`. Drops nothing.
+  `flow`/`reality-opts`. `flavor=mihomo` (default) / `premium` / `stash` drops the
+  protocols and fields the kernel cannot load (`premium` drops VLESS/Hysteria/Hysteria2/
+  TUIC/AnyTLS and `client-fingerprint`/`reality-opts`; `stash` additionally keeps
+  reality but drops AnyTLS and fingerprints). Drops nothing under `mihomo`.
 - `clashr` (`clashr.yaml`, `text/yaml`) — ClashR YAML, same field-name rule as `clash`.
   Drops nothing.
 - `surge` (`surge.conf`, `text/plain`) — Surge v2–v5 (`surge_version`, default 5); proxy
@@ -117,7 +120,8 @@ types the target silently drops.
 - `mellow` (`mellow.conf`, `text/plain`) — `[Endpoint]`/`[EndpointGroup]`, plus
   `[RoutingRule]` from rulesets. Keeps only SS without plugin, VMess, SOCKS5, and HTTP.
 - `singbox` (`singbox.json`, `application/json`) — `outbounds` (selector/urltest groups),
-  `route.rules`/`route.final` from rulesets. Drops SSR and Snell.
+  `route.rules`/`route.final` from rulesets. Drops SSR (sing-box has no ShadowsocksR
+  implementation); Snell needs sing-box ≥ 1.14.
 - `v2ray` (`v2ray.txt`, `text/plain`) — base64 VMess-link list. Drops non-VMess.
 - `ss` (`ss.txt`, `text/plain`) — base64 SS-link list, deduplicated; SSR `origin`/`plain`
   flattened to SS. Drops non-SS.
@@ -145,7 +149,8 @@ types the target silently drops.
 - External-config parsing (`[custom]` INI: `ruleset`, `custom_proxy_group`, `rename`,
   `name_regex`, `name_remove`, `emoji`, include/exclude remarks, base files) and request
   query-string parsing.
-- Lightweight template interpolation (`{{ var }}`) driven by `[template]` variables.
+- Lightweight template interpolation (`{{ var }}`) driven by `[template]` variables;
+  placeholders in `baseConf` are substituted before generation.
 - Rules are **on by default**: with no explicit `rulesets`/`groups`, generation falls back
   to the bundled upstream-like remote defaults (cached with TTL + single-flight in
   `@subconverter/node`, offline fallback to the bundled static rules). Pass
@@ -201,7 +206,13 @@ subconverter serve --port 25500 --host 0.0.0.0
 
 Convert flags: `--surge-version` (default **5**), `--new-field-name` (default **true**,
 `--new-field-name=false` for legacy `Proxy` keys), `--legacy` (legacy Clash field names),
+`--flavor mihomo|premium|stash` (Clash kernel capabilities), `--classical` (verbatim
+Clash `payload:` lists), `--no-expand` (keep remote rulesets as `RULE-SET` references for
+Surge-family), `--dev-id` (Quantumult X device ID),
 `--with-rules` (default on, kept for compat) / `--no-rules` (strip rules and default groups).
+
+Serve flags: `--geoip <mmdb>` and `--managed-prefix <url>` (prefix for the Surge-family
+`#!MANAGED-CONFIG` header, e.g. `subconverter serve --managed-prefix https://ex.com/`).
 
 ### Name cleanup before renaming
 
@@ -289,7 +300,17 @@ Defaults are shown in parentheses; every underscore param also accepts a hyphen 
   `|`-separated.
 - `group` — extra select-group name (repeatable).
 - `interval` (upstream value) — override the `profile-update-interval` response header.
-- `surge_version` (aliases `surge-version`, `ver`, `version`; default `5`).
+- `surge_version` (aliases `surge-version`, `ver`, `version`; default `5`) — note: the
+  default differs from upstream subconverter / subconverter-rs (`3`).
+- `flavor` (`mihomo`) — Clash kernel: `mihomo` (default, full output), `premium`
+  (drops VLESS/Hysteria/Hysteria2/TUIC/AnyTLS, strips `client-fingerprint` and
+  `reality-opts`), or `stash` (drops AnyTLS, strips `client-fingerprint`).
+- `expand` (default `true`) — `false` keeps remote rulesets as `RULE-SET,url,group`
+  references for Surge/Surfboard instead of inlining them (Clash always expands).
+- `strict` (default `false`) — `strict=true` in the Surge-family `#!MANAGED-CONFIG`
+  header (only emitted with `--managed-prefix`).
+- `filename` — override the download (`Content-Disposition`) filename.
+- `dev_id` (aliases `dev-id`, `device_id`, `device-id`) — Quantumult X device ID.
 - `new_field_name` (aliases `new_name` and hyphen variants; default `true`) — Clash new
   field names; a bare `?flag` counts as `true`.
 - `legacy` (aliases `legacy_field_name`, `legacy-field-name`; default `false`) — legacy
@@ -310,6 +331,10 @@ Defaults are shown in parentheses; every underscore param also accepts a hyphen 
 - `userinfo_url` (aliases `userinfo-url`, `userinfo`) — extra quota endpoint (see below).
 - `userinfo_provider` (aliases `userinfo-provider`, `userinfo_type`, `userinfo-type`;
   auto-detected) — quota converter (see below).
+- `classical` — treat Clash `payload:` lists verbatim when converting rulesets.
+- Blocklisted `include`/`exclude` patterns (e.g. `(.*)*`) are rejected with 400.
+- Booleans accept `true`/`false`, `1`/`0`, `yes`/`no`, `on`/`off` (bare `?flag` counts
+  as `true`).
 - All remaining flags parsed by `parseRequestSettings` (`rename`, `emoji`, `include`,
   `exclude`, `add_emoji`, `remove_emoji`, `append_type`, `sort`, `filter_deprecated`,
   `dedupe`, `tfo`, `udp`, `scv`, `tls13`, `insert`, `classical`, …) accept underscore or

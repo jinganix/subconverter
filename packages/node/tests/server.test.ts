@@ -164,6 +164,29 @@ describe("convertSubRequest", () => {
     await expect(convertSubRequest(many.toString(), many)).rejects.toThrow(/Too many/);
   });
 
+  it("rejects blacklisted include patterns", async () => {
+    stubFetch(() => new Response(SUB_BODY, { status: 200 }));
+    const raw = "target=clash&url=https%3A%2F%2Fexample.com%2Fsub&include=(.*)*";
+    await expect(convertSubRequest(raw, new URLSearchParams(raw))).rejects.toThrow(/Invalid regex/);
+  });
+
+  it("honors the filename override", async () => {
+    stubFetch(() => new Response(SUB_BODY, { status: 200 }));
+    const raw = "target=clash&url=https%3A%2F%2Fexample.com%2Fsub&filename=o.yaml";
+    const result = await convertSubRequest(raw, new URLSearchParams(raw));
+    expect(result.filename).toBe("o.yaml");
+  });
+
+  it("prepends MANAGED-CONFIG for surge with a managed prefix", async () => {
+    stubFetch(() => new Response(SUB_BODY, { status: 200 }));
+    const raw = "target=surge&url=https%3A%2F%2Fexample.com%2Fsub&no_rules=true";
+    const result = await convertSubRequest(raw, new URLSearchParams(raw), {
+      managedPrefix: "https://example.com/",
+    });
+    expect(result.body.startsWith("#!MANAGED-CONFIG https://example.com/sub?target=surge"));
+    expect(result.body).toContain("interval=86400 strict=false");
+  });
+
   it("reports empty subscriptions", async () => {
     stubFetch(() => new Response("nothing here", { status: 200 }));
     const params = new URLSearchParams({ target: "clash", url: "https://example.com" });

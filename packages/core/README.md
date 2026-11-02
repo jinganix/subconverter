@@ -27,9 +27,8 @@ Share-link lists (plain or base64), `ssd://` subscriptions, Clash YAML, Surge/Lo
 and app JSON exports (Shadowsocks `ssconf`, SSR, v2rayN, SSTap, Netch).
 
 Link schemes: `ss://`, `ssr://`, `vmess://`, `vless://`, `trojan://`, `hysteria://`,
-`hysteria2://` / `hy2://`, `tuic://`, `anytls://`, `socks://`, `tg://socks`,
-`tg://http`, and `Netch://`. WireGuard, Snell, and Hysteria v1 come from config files
-only, since they have no share-link scheme.
+`hysteria2://` / `hy2://`, `tuic://`, `anytls://`, `snell://`, `wg://` / `wireguard://`,
+`socks://`, `tg://socks`, `tg://http`, and `Netch://`.
 
 ## Supported output
 

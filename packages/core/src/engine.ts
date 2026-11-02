@@ -15,6 +15,7 @@ import type { ProxyGroupConfig } from "./types/proxy-group";
 import type { RulesetContent } from "./types/ruleset";
 import type { ExtraSettings } from "./types/settings";
 import { TargetFormat, createExtraSettings } from "./types/settings";
+import { hasTemplatePlaceholders, renderTemplate } from "./utils/template";
 
 /** Options controlling a single conversion. */
 export interface GenerateOptions {
@@ -72,6 +73,7 @@ export function generate(nodes: Proxy[], options: GenerateOptions): string {
   runPreprocess(nodes, settings);
   const groups = resolveGroups(options);
   const rulesets = resolveRulesets(options, settings);
+  const baseConf = applyBaseTemplate(options.baseConf ?? "", settings);
 
   switch (options.target) {
     case TargetFormat.Clash:
@@ -82,9 +84,11 @@ export function generate(nodes: Proxy[], options: GenerateOptions): string {
     }
     case TargetFormat.Surge: {
       const surgeVersion = options.surgeVersion ?? 5;
-      const rules = rulesets ? rulesetToSurgeRules(rulesets, surgeVersion) : undefined;
+      const rules = rulesets
+        ? rulesetToSurgeRules(rulesets, surgeVersion, settings.expandRulesets)
+        : undefined;
       return toSurge(nodes, groups, settings, {
-        baseConf: options.baseConf ?? "",
+        baseConf,
         nodeList: settings.nodeList,
         rules,
         version: surgeVersion,
@@ -93,7 +97,7 @@ export function generate(nodes: Proxy[], options: GenerateOptions): string {
     case TargetFormat.QuantumultX: {
       const rules = rulesets ? rulesetToSurgeRules(rulesets, -1) : undefined;
       return toQuanX(nodes, groups, settings, {
-        baseConf: options.baseConf ?? "",
+        baseConf,
         nodeList: settings.nodeList,
         rules,
       });
@@ -101,7 +105,7 @@ export function generate(nodes: Proxy[], options: GenerateOptions): string {
     case TargetFormat.Quantumult: {
       const rules = rulesets ? rulesetToSurgeRules(rulesets, -2) : undefined;
       return toQuan(nodes, groups, settings, {
-        baseConf: options.baseConf ?? "",
+        baseConf,
         nodeList: settings.nodeList,
         rules,
       });
@@ -109,21 +113,21 @@ export function generate(nodes: Proxy[], options: GenerateOptions): string {
     case TargetFormat.Loon: {
       const rules = rulesets ? rulesetToSurgeRules(rulesets, -4) : undefined;
       return toLoon(nodes, groups, settings, {
-        baseConf: options.baseConf ?? "",
+        baseConf,
         nodeList: settings.nodeList,
         rules,
       });
     }
     case TargetFormat.SingBox:
       return toSingBox(nodes, groups, settings, {
-        baseConf: options.baseConf ?? "",
+        baseConf,
         nodeList: settings.nodeList,
         overwriteOriginalRules: settings.overwriteOriginalRules,
         rulesets,
       });
     case TargetFormat.Mellow:
       return toMellow(nodes, groups, settings, {
-        baseConf: options.baseConf ?? "",
+        baseConf,
         nodeList: settings.nodeList,
         overwriteOriginalRules: settings.overwriteOriginalRules,
         rulesets,
@@ -141,11 +145,13 @@ export function generate(nodes: Proxy[], options: GenerateOptions): string {
     case TargetFormat.SSD:
       return proxyToSsd(nodes, "", "");
     case TargetFormat.SSSub:
-      return proxyToSsSub(nodes, options.baseConf ?? "");
+      return proxyToSsSub(nodes, baseConf);
     case TargetFormat.Surfboard: {
-      const rules = rulesets ? rulesetToSurgeRules(rulesets, options.surgeVersion ?? 5) : undefined;
+      const rules = rulesets
+        ? rulesetToSurgeRules(rulesets, options.surgeVersion ?? 5, settings.expandRulesets)
+        : undefined;
       return toSurfboard(nodes, groups, settings, {
-        baseConf: options.baseConf ?? "",
+        baseConf,
         nodeList: settings.nodeList,
         rules,
       });
@@ -157,6 +163,14 @@ export function generate(nodes: Proxy[], options: GenerateOptions): string {
     default:
       throw new Error(`Unsupported target format: ${options.target}`);
   }
+}
+
+/** Apply `[template]` variables to `{{ var }}` placeholders in a base config. */
+function applyBaseTemplate(baseConf: string, settings: ExtraSettings): string {
+  if (baseConf === "" || !hasTemplatePlaceholders(baseConf)) {
+    return baseConf;
+  }
+  return renderTemplate(baseConf, settings.templateVars);
 }
 
 /** Export Shadowsocks nodes as a SIP008 document (`ssconf`). */
@@ -210,7 +224,7 @@ function attachClashRules(
     return;
   }
   const field = settings.clashNewFieldName ? "rules" : "Rule";
-  const generated = rulesetToClashRules(rulesets);
+  const generated = rulesetToClashRules(rulesets, settings.clashClassicalRuleset);
   if (generated.length === 0) {
     return;
   }

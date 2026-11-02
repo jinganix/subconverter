@@ -4,7 +4,9 @@ import {
   explodeAnyTls,
   explodeHttp,
   explodeHttpSub,
+  explodeHysteria,
   explodeHysteria2,
+  explodeSnell,
   explodeSs,
   explodeSsr,
   explodeSocks,
@@ -13,6 +15,7 @@ import {
   explodeTuic,
   explodeVless,
   explodeVmess,
+  explodeWireguard,
   isLink,
 } from "./uri";
 import type { Proxy } from "../types/proxy";
@@ -44,6 +47,12 @@ export function explode(link: string, node: Proxy): void {
     explodeVless(link, node);
   } else if (startsWith(link, "tuic://")) {
     explodeTuic(link, node);
+  } else if (startsWith(link, "snell://")) {
+    explodeSnell(link, node);
+  } else if (startsWith(link, "hysteria://")) {
+    explodeHysteria(link, node);
+  } else if (startsWith(link, "wg://") || startsWith(link, "wireguard://")) {
+    explodeWireguard(link, node);
   } else if (link.includes("hysteria2://") || link.includes("hy2://")) {
     explodeHysteria2(link, node);
   } else if (startsWith(link, "anytls://")) {

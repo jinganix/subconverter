@@ -15,7 +15,13 @@
 - `packages/core` is platform-free: no `node:*` imports and no DOM globals
 - Default behavior: rules are ON. `generate()` with no rulesets falls back to bundled
   upstream-like defaults; pass `includeRules: false` (`no_rules` / `--no-rules`) to strip them
-- Surge target defaults to version 5 (`surgeVersion`)
+- Surge target defaults to version 5 (`surgeVersion`; upstream/subconverter-rs default to 3)
+- Clash output takes `flavor=mihomo|premium|stash` (`clashFlavor`): premium drops
+  VLESS/Hysteria/Hysteria2/TUIC/AnyTLS and `client-fingerprint`/`reality-opts`;
+  stash keeps reality but drops AnyTLS and fingerprints
+- `expand=false` keeps remote rulesets as `RULE-SET,url,group` refs for
+  Surge/Surfboard (Clash always expands); `classical` passes Clash `payload:`
+  lists through verbatim
 - Entry points: `parseSubscription()` → `Proxy[]`, `generate(nodes, { target })` → `string`,
   `TargetFormat` enum for the output target
 - Targets: `clash`, `clashr`, `surge`, `surfboard`, `quanx`, `quan`, `loon`, `mellow`,
