@@ -28,8 +28,8 @@ Modules:
 - [`types/tribool`](#subconvertercore-typestribool): `parseTriBool`, `triBoolOr`, `TriBool`
 - [`utils/base64`](#subconvertercore-utilsbase64): `base64Decode`, `base64Encode`, `tryBase64Decode`, `urlSafeBase64Decode`, `urlSafeBase64Encode`, `utf8Decode`, `utf8Encode`
 - [`utils/ini`](#subconvertercore-utilsini): `findSection`, `getSectionItems`, `parseIni`, `parseRawIni`, `renderRawIni`, `setRawSection`, `IniDocument`, `IniSection`, `RawIniSection`
-- [`utils/string`](#subconvertercore-utilsstring): `countOccurrences`, `isBlank`, `isIp`, `isIpv4`, `isIpv6`, `pad2`, `regMatch`, `regReplace`, `replaceAllDistinct`, `split`, `startsWith`, `strFind`, `toBool`, `toInt`, `trim`, `trimLowerCase`
-- [`utils/url`](#subconvertercore-utilsurl): `getAllUrlArgs`, `getUrlArg`, `normalizeQueryKey`, `splitUrl`, `stripScheme`, `urlDecode`, `urlEncode`
+- [`utils/string`](#subconvertercore-utilsstring): `countOccurrences`, `isBlank`, `isIp`, `isIpv4`, `isIpv6`, `pad2`, `regMatch`, `regReplace`, `replaceAllDistinct`, `split`, `startsWith`, `strFind`, `stripBom`, `toBool`, `toInt`, `trim`, `trimLowerCase`
+- [`utils/url`](#subconvertercore-utilsurl): `getAllUrlArgs`, `getFirstUrlArg`, `getUrlArg`, `normalizeQueryKey`, `splitUrl`, `stripScheme`, `urlDecode`, `urlEncode`
 - [`utils/hash`](#subconvertercore-utilshash): `fnv1a64`, `fnv1a64Hex`
 - [`utils/template`](#subconvertercore-utilstemplate): `hasTemplatePlaceholders`, `renderTemplate`, `templateVariableNames`, `TemplateVars`
 - [`settings/config`](#subconvertercore-settingsconfig): `RULESET_TYPE_PREFIXES`, `parseCustomProxyGroup`, `parseExternalConfig`, `parseGroupTimes`, `parseRegexMatch`, `parseRulesetConfig`, `parseRulesetSource`, `ExternalConfig`
@@ -43,7 +43,7 @@ Modules:
 - [`parser/uri`](#subconvertercore-parseruri): `explodeAnyTls`, `explodeHttp`, `explodeHttpSub`, `explodeHysteria`, `explodeHysteria2`, `explodeKitsunebi`, `explodeQuan`, `explodeShadowrocket`, `explodeSnell`, `explodeSocks`, `explodeSs`, `explodeSsd`, `explodeSsr`, `explodeStdVmess`, `explodeTrojan`, `explodeTuic`, `explodeVless`, `explodeVmess`, `explodeWireguard`, `isLink`
 - [`generator/clash`](#subconvertercore-generatorclash): `buildClash`, `stringifyClash`, `toClash`
 - [`generator/default-profile`](#subconvertercore-generatordefault-profile): `getDefaultProxyGroups`, `getDefaultRulesetConfigs`, `getDefaultRulesets`
-- [`engine`](#subconvertercore-engine): `generate`, `runPreprocess`, `toSip008`, `GenerateOptions`
+- [`engine`](#subconvertercore-engine): `convertNodes`, `generate`, `runPreprocess`, `toSip008`, `ConvertedNodes`, `GenerateOptions`
 - [`generator/ruleset`](#subconvertercore-generatorruleset): `CLASH_RULE_TYPES`, `QUANX_RULE_TYPES`, `SING_BOX_RULE_TYPES`, `SURF_RULE_TYPES`, `SURGE2_RULE_TYPES`, `SURGE_RULE_TYPES`, `convertRuleset`, `rulesetToClashRules`, `rulesetToSingBoxRules`, `rulesetToSurgeRules`, `transformRuleToCommon`, `SingBoxRoute`, `SurgeRulesetResult`
 - [`generator/loon`](#subconvertercore-generatorloon): `toLoon`, `LoonOptions`
 - [`generator/mellow`](#subconvertercore-generatormellow): `toMellow`, `MellowOptions`
@@ -779,6 +779,14 @@ function startsWith(input: string, prefix: string): boolean;
 function strFind(haystack: string, needle: string): boolean;
 ```
 
+#### `stripBom` (function)
+
+> Strip a leading UTF-8 BOM (some providers serve one).
+
+```ts
+function stripBom(input: string): string;
+```
+
 #### `toBool` (function)
 
 > Parse a boolean-ish value ("true"/"yes"/"1"/"on" and the matching negatives).
@@ -825,6 +833,15 @@ Source: [`./src/utils/url.ts`](../packages/core/src/utils/url.ts)
 
 ```ts
 function getAllUrlArgs(query: string, key: string): string[];
+```
+
+#### `getFirstUrlArg` (function)
+
+> Read the first non-empty value across `_`/`-` alias keys, mirroring
+> `firstArg` in the original C++ (`first_value(query, {keys})`).
+
+```ts
+function getFirstUrlArg(query: string, ...keys: string[]): string;
 ```
 
 #### `getUrlArg` (function)
@@ -1757,12 +1774,23 @@ function getDefaultRulesets(): RulesetContent[];
 
 Source: [`./src/engine.ts`](../packages/core/src/engine.ts)
 
+#### `convertNodes` (function)
+
+> Like `generate`, but also returns the nodes that survived preprocessing
+> (`rename`/`include`/`exclude`/country filters). Nodes are copied, so the
+> caller's array keeps its original remarks and ids.
+
+```ts
+function convertNodes(inputNodes: Proxy[], options: GenerateOptions): ConvertedNodes;
+```
+
 #### `generate` (function)
 
 > Convert nodes into the requested output format.
 >
 > This is the isomorphic generation entry point used by the CLI, the Node
-> adapter, and the browser build.
+> adapter, and the browser build. The input array is never modified; use
+> `convertNodes` when you also need the preprocessed nodes.
 
 ```ts
 function generate(nodes: Proxy[], options: GenerateOptions): string;
@@ -1783,6 +1811,19 @@ function runPreprocess(nodes: Proxy[], settings: ExtraSettings): void;
 ```ts
 function toSip008(nodes: Proxy[], baseConf = ""): string;
 ```
+
+#### `ConvertedNodes` (interface)
+
+> A generated config plus the nodes that went into it.
+
+```ts
+interface ConvertedNodes
+```
+
+Members:
+
+- `nodes` (`Proxy[]`, required) — Nodes after preprocessing (rename, filters, dedupe, sort); a copy.
+- `output` (`string`, required) — Generated configuration text.
 
 #### `GenerateOptions` (interface)
 
@@ -2471,28 +2512,15 @@ Builds from: [`packages/node/src/index.ts`](../packages/node/src/index.ts).
 
 Modules:
 
-- [`(entry point)`](#subconverternode-entry-point): `LoadOptions`, `MAX_FETCH_BYTES`, `readCappedText`, `fetchSubscription`, `readSubscriptionFile`, `writeOutputFile`, `SubscriptionSource`, `resolveSubscription`, `loadNodes`, `ConvertRequest`, `ConvertInput`, `detectRulesetType`, `loadRuleset`, `collectRulesets`, `clearDefaultRulesetCache`, `getCachedDefaultRulesets`, `collectNodes`, `prepareConversion`, `buildCountryResolver`, `defaultRequestSettings`
+- [`fetch`](#subconverternode-fetch): `MAX_FETCH_BYTES`, `fetchSubscription`, `loadNodes`, `readCappedText`, `readSubscriptionFile`, `resolveSubscription`, `writeOutputFile`, `LoadOptions`, `SubscriptionSource`
+- [`ruleset-load`](#subconverternode-ruleset-load): `clearDefaultRulesetCache`, `collectRulesets`, `detectRulesetType`, `getCachedDefaultRulesets`, `loadRuleset`
+- [`convert`](#subconverternode-convert): `buildCountryResolver`, `collectNodes`, `defaultRequestSettings`, `prepareConversion`, `ConvertInput`, `ConvertRequest`
 - [`geoip`](#subconverternode-geoip): `clearGeoIpCache`, `countryResolverFrom`, `getGeoIpDatabase`, `isHostIp`, `openGeoIpDatabase`, `resolveNodeCountries`, `GeoIpDatabase`, `ResolveCountryOptions`
 - [`server`](#subconverternode-server): `collectRequestUrls`, `contentTypeForTarget`, `convertSubRequest`, `createSubServer`, `fetchSubscriptionDetailed`, `fetchUserinfoHeader`, `splitSubscriptionUrls`, `startServer`, `ServeOptions`, `SubConversion`
 
-### @subconverter/node: (entry point)
+### @subconverter/node: fetch
 
-Source: [`./src/index.ts`](../packages/node/src/index.ts)
-
-#### `LoadOptions` (interface)
-
-> Options for `loadSubscription`.
-
-```ts
-interface LoadOptions
-```
-
-Members:
-
-- `headers` (`Record<string, string>`, optional) — Optional request headers (e.g. `User-Agent`, `Authorization`).
-- `proxy` (`string`, optional) — Optional proxy to route the request through (not yet supported).
-- `timeoutMs` (`number`, optional) — Abort the request after this many milliseconds.
-- `maxBytes` (`number`, optional) — Abort when the response body exceeds this many bytes.
+Source: [`./src/fetch.ts`](../packages/node/src/fetch.ts)
 
 #### `MAX_FETCH_BYTES` (const)
 
@@ -2500,6 +2528,22 @@ Members:
 
 ```ts
 const MAX_FETCH_BYTES = 5 * 1024 * 1024;
+```
+
+#### `fetchSubscription` (function)
+
+> Fetch a remote subscription body as text.
+
+```ts
+async function fetchSubscription(url: string, options: LoadOptions = {}): Promise<string>;
+```
+
+#### `loadNodes` (function)
+
+> Load and parse a subscription source into proxy nodes.
+
+```ts
+async function loadNodes(source: SubscriptionSource): Promise<Proxy[]>;
 ```
 
 #### `readCappedText` (function)
@@ -2512,20 +2556,20 @@ const MAX_FETCH_BYTES = 5 * 1024 * 1024;
 async function readCappedText(response: Response, maxBytes: number): Promise<string>;
 ```
 
-#### `fetchSubscription` (function)
-
-> Fetch a remote subscription body as text.
-
-```ts
-async function fetchSubscription(url: string, options: LoadOptions = {}): Promise<string>;
-```
-
 #### `readSubscriptionFile` (function)
 
 > Read a local subscription/config file as text.
 
 ```ts
 async function readSubscriptionFile(path: string): Promise<string>;
+```
+
+#### `resolveSubscription` (function)
+
+> Resolve any `SubscriptionSource` to raw text.
+
+```ts
+async function resolveSubscription(source: SubscriptionSource): Promise<string>;
 ```
 
 #### `writeOutputFile` (function)
@@ -2535,6 +2579,20 @@ async function readSubscriptionFile(path: string): Promise<string>;
 ```ts
 async function writeOutputFile(path: string, content: string): Promise<void>;
 ```
+
+#### `LoadOptions` (interface)
+
+> Options for `fetchSubscription`.
+
+```ts
+interface LoadOptions
+```
+
+Members:
+
+- `headers` (`Record<string, string>`, optional) — Optional request headers (e.g. `User-Agent`, `Authorization`).
+- `timeoutMs` (`number`, optional) — Abort the request after this many milliseconds.
+- `maxBytes` (`number`, optional) — Abort when the response body exceeds this many bytes.
 
 #### `SubscriptionSource` (type)
 
@@ -2547,39 +2605,98 @@ type SubscriptionSource =
   | { kind: "text"; text: string };
 ```
 
-#### `resolveSubscription` (function)
+### @subconverter/node: ruleset-load
 
-> Resolve any `SubscriptionSource` to raw text.
+Source: [`./src/ruleset-load.ts`](../packages/node/src/ruleset-load.ts)
 
-```ts
-async function resolveSubscription(source: SubscriptionSource): Promise<string>;
-```
+#### `clearDefaultRulesetCache` (function)
 
-#### `loadNodes` (function)
-
-> Load and parse a subscription source into proxy nodes.
+> Clear the cached default rulesets (tests only).
 
 ```ts
-async function loadNodes(source: SubscriptionSource): Promise<Proxy[]>;
+function clearDefaultRulesetCache(): void;
 ```
 
-#### `ConvertRequest` (interface)
+#### `collectRulesets` (function)
 
-> A fully-resolved conversion request.
+> Fetch/read every configured ruleset concurrently, skipping failures.
 
 ```ts
-interface ConvertRequest
+async function collectRulesets(
+  configs: RulesetConfig[],
+  options: LoadOptions = {},
+): Promise<RulesetContent[]>;
 ```
 
-Members:
+#### `detectRulesetType` (function)
 
-- `sources` (`SubscriptionSource[]`, required)
-- `target` (`TargetFormat`, required)
-- `extraProxyGroup` (`ProxyGroupConfig[]`, optional)
-- `rulesets` (`RulesetConfig[]`, optional)
-- `settings` (`Partial<ExtraSettings>`, optional)
-- `geoipPath` (`string`, optional) — Local MaxMind `.mmdb` database (GeoLite2/GeoIP2 Country or City) used to prefix node names with their country when `settings.autoCountry` is on.
-- `includeRules` (`boolean`, optional) — When `false`, rules are stripped. Defaults to `true`: with no explicit `rulesets`/`extraProxyGroup`, fall back to the bundled upstream-like defaults (`ACL4SSR`). Maps to core `GenerateOptions.includeRules`.
+> Infer a ruleset dialect from content when no explicit hint is given.
+
+```ts
+function detectRulesetType(content: string): RulesetType;
+```
+
+#### `getCachedDefaultRulesets` (function)
+
+> Resolve the bundled upstream-like remote defaults, caching the result with
+> a TTL and single-flight so concurrent conversions share one fetch batch.
+> Falls back to the bundled offline rules when fetching fails.
+
+```ts
+async function getCachedDefaultRulesets(): Promise<RulesetContent[]>;
+```
+
+#### `loadRuleset` (function)
+
+> Fetch or read a ruleset body and normalize it into a `RulesetContent`.
+
+```ts
+async function loadRuleset(
+  config: RulesetConfig,
+  options: LoadOptions = {},
+): Promise<RulesetContent>;
+```
+
+### @subconverter/node: convert
+
+Source: [`./src/convert.ts`](../packages/node/src/convert.ts)
+
+#### `buildCountryResolver` (function)
+
+> GeoIP-resolve every node's country and return a synchronous resolver for
+> core preprocessing. A missing database is an error: silently dropping the
+> prefix would be confusing, so callers surface it.
+
+```ts
+async function buildCountryResolver(
+  nodes: Proxy[],
+  geoipPath: string,
+): Promise<(node: Proxy) => string | undefined>;
+```
+
+#### `collectNodes` (function)
+
+> Load every source and merge the resulting nodes.
+
+```ts
+async function collectNodes(sources: SubscriptionSource[]): Promise<Proxy[]>;
+```
+
+#### `defaultRequestSettings` (function)
+
+> Default `RequestSettings` derived from a conversion target.
+
+```ts
+function defaultRequestSettings(target: TargetFormat): RequestSettings;
+```
+
+#### `prepareConversion` (function)
+
+> Build the generation input for a `ConvertRequest`.
+
+```ts
+async function prepareConversion(request: ConvertRequest): Promise<ConvertInput>;
+```
 
 #### `ConvertInput` (interface)
 
@@ -2598,90 +2715,23 @@ Members:
 - `settings` (`ExtraSettings`, required)
 - `includeRules` (`boolean`, optional)
 
-#### `detectRulesetType` (function)
+#### `ConvertRequest` (interface)
 
-> Infer a ruleset dialect from content when no explicit hint is given.
-
-```ts
-function detectRulesetType(content: string): RulesetType;
-```
-
-#### `loadRuleset` (function)
-
-> Fetch or read a ruleset body and normalize it into a `RulesetContent`.
+> A fully-resolved conversion request.
 
 ```ts
-async function loadRuleset(
-  config: RulesetConfig,
-  options: LoadOptions = {},
-): Promise<RulesetContent>;
+interface ConvertRequest
 ```
 
-#### `collectRulesets` (function)
+Members:
 
-> Fetch/read every configured ruleset concurrently, skipping failures.
-
-```ts
-async function collectRulesets(
-  configs: RulesetConfig[],
-  options: LoadOptions = {},
-): Promise<RulesetContent[]>;
-```
-
-#### `clearDefaultRulesetCache` (function)
-
-> Clear the cached default rulesets (tests only).
-
-```ts
-function clearDefaultRulesetCache(): void;
-```
-
-#### `getCachedDefaultRulesets` (function)
-
-> Resolve the bundled upstream-like remote defaults, caching the result with
-> a TTL and single-flight so concurrent conversions share one fetch batch.
-> Falls back to the bundled offline rules when fetching fails.
-
-```ts
-async function getCachedDefaultRulesets(): Promise<RulesetContent[]>;
-```
-
-#### `collectNodes` (function)
-
-> Load every source and merge the resulting nodes.
-
-```ts
-async function collectNodes(sources: SubscriptionSource[]): Promise<Proxy[]>;
-```
-
-#### `prepareConversion` (function)
-
-> Build the generation input for a `ConvertRequest`.
-
-```ts
-async function prepareConversion(request: ConvertRequest): Promise<ConvertInput>;
-```
-
-#### `buildCountryResolver` (function)
-
-> GeoIP-resolve every node's country and return a synchronous resolver for
-> core preprocessing. A missing database is an error: silently dropping the
-> prefix would be confusing, so callers surface it.
-
-```ts
-async function buildCountryResolver(
-  nodes: Proxy[],
-  geoipPath: string,
-): Promise<(node: Proxy) => string | undefined>;
-```
-
-#### `defaultRequestSettings` (function)
-
-> Default `RequestSettings` derived from a conversion target.
-
-```ts
-function defaultRequestSettings(target: TargetFormat): RequestSettings;
-```
+- `sources` (`SubscriptionSource[]`, required)
+- `target` (`TargetFormat`, required)
+- `extraProxyGroup` (`ProxyGroupConfig[]`, optional)
+- `rulesets` (`RulesetConfig[]`, optional)
+- `settings` (`Partial<ExtraSettings>`, optional)
+- `geoipPath` (`string`, optional) — Local MaxMind `.mmdb` database (GeoLite2/GeoIP2 Country or City) used to prefix node names with their country when `settings.autoCountry` is on.
+- `includeRules` (`boolean`, optional) — When `false`, rules are stripped. Defaults to `true`: with no explicit `rulesets`/`extraProxyGroup`, fall back to the bundled upstream-like defaults (`ACL4SSR`). Maps to core `GenerateOptions.includeRules`.
 
 ### @subconverter/node: geoip
 
@@ -2921,7 +2971,7 @@ Builds from: [`packages/cli/src/index.ts`](../packages/cli/src/index.ts).
 
 Modules:
 
-- [`(entry point)`](#subconvertercli-entry-point): `runCli`, `isKnownType`
+- [`(entry point)`](#subconvertercli-entry-point): `runCli`
 
 ### @subconverter/cli: (entry point)
 
@@ -2933,12 +2983,4 @@ Source: [`./src/index.ts`](../packages/cli/src/index.ts)
 
 ```ts
 async function runCli(argv: string[]): Promise<number>;
-```
-
-#### `isKnownType` (function)
-
-> `true` when `node.type` names a known proxy type (helper for consumers).
-
-```ts
-function isKnownType(type: string): boolean;
 ```

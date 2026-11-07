@@ -71,22 +71,22 @@ structured JSON configs → `ssd://` → Clash YAML → Surge INI → base64/pla
 `explode*` in `packages/core/src/parser/uri.ts`; config-only protocols (no link
 scheme) come from Clash/Surge parsers.
 
-| Protocol (`ProxyType`) | Link scheme                                      | Input source                                                          | Transports / TLS notes                                          |
-| ---------------------- | ------------------------------------------------ | --------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `ss` Shadowsocks       | `ss://`                                          | link (SIP002 incl. AEAD-2022 plaintext userinfo, plain, `simple-obfs`/`v2ray-plugin`) | obfs / v2ray-plugin options kept |
-| `ssr` ShadowsocksR     | `ssr://`                                         | link                                                                  | `origin`/`plain` SSR flattens to SS for SS-only targets         |
-| `vmess` VMess          | `vmess://`, `vmess1://`                          | link (v2rayN JSON, Shadowrocket, Kitsunebi, Quantumult share formats) | `tcp`/`ws`; `tls`; `aid`/`aead`                                 |
-| `vless` VLESS          | `vless://`                                       | link                                                                  | `tcp`/`ws`/`grpc`; `tls`/`reality` with `flow`/`fp`/`pbk`/`sid` |
-| `trojan` Trojan        | `trojan://`                                      | link (direct / `ws`)                                                  | `sni`/`host`/`path`                                             |
-| `socks5` SOCKS5        | `socks://`, `tg://socks`, `https://t.me/socks`   | link (incl. Telegram)                                                 | optional auth / TLS                                             |
-| `http`/`https` HTTP    | credential URL, `tg://http`, `https://t.me/http` | link (incl. Telegram, `http://` credential lists)                     | `username:password@host:port`                                   |
-| `hysteria2` Hysteria2  | `hysteria2://`, `hy2://`                         | link                                                                  | `password`, `sni`, speeds, fingerprint                          |
-| `tuic` TUIC            | `tuic://`                                        | link                                                                  | `uuid`/`password`, congestion control                           |
-| `anytls` AnyTLS        | `anytls://`                                      | link                                                                  | `password`, `sni`                                               |
-| `wireguard` WireGuard  | `wg://`, `wireguard://`                          | link + Clash / Surge `[WireGuard]`                                    | keys, `self-ip`, DNS, MTU, peers                                |
-| `snell` Snell          | `snell://`                                       | link + Clash / Surge                                                  | `psk`, `obfs`, `version`                                        |
-| `hysteria` Hysteria v1 | `hysteria://`                                    | link + Clash                                                          | legacy `up`/`down`, obfs, auth                                  |
-| `Netch`                | `Netch://`                                       | link                                                                  | Netch share format                                              |
+| Protocol (`ProxyType`) | Link scheme                                      | Input source                                                                          | Transports / TLS notes                                          |
+| ---------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `ss` Shadowsocks       | `ss://`                                          | link (SIP002 incl. AEAD-2022 plaintext userinfo, plain, `simple-obfs`/`v2ray-plugin`) | obfs / v2ray-plugin options kept                                |
+| `ssr` ShadowsocksR     | `ssr://`                                         | link                                                                                  | `origin`/`plain` SSR flattens to SS for SS-only targets         |
+| `vmess` VMess          | `vmess://`, `vmess1://`                          | link (v2rayN JSON, Shadowrocket, Kitsunebi, Quantumult share formats)                 | `tcp`/`ws`; `tls`; `aid`/`aead`                                 |
+| `vless` VLESS          | `vless://`                                       | link                                                                                  | `tcp`/`ws`/`grpc`; `tls`/`reality` with `flow`/`fp`/`pbk`/`sid` |
+| `trojan` Trojan        | `trojan://`                                      | link (direct / `ws`)                                                                  | `sni`/`host`/`path`                                             |
+| `socks5` SOCKS5        | `socks://`, `tg://socks`, `https://t.me/socks`   | link (incl. Telegram)                                                                 | optional auth / TLS                                             |
+| `http`/`https` HTTP    | credential URL, `tg://http`, `https://t.me/http` | link (incl. Telegram, `http://` credential lists)                                     | `username:password@host:port`                                   |
+| `hysteria2` Hysteria2  | `hysteria2://`, `hy2://`                         | link                                                                                  | `password`, `sni`, speeds, fingerprint                          |
+| `tuic` TUIC            | `tuic://`                                        | link                                                                                  | `uuid`/`password`, congestion control                           |
+| `anytls` AnyTLS        | `anytls://`                                      | link                                                                                  | `password`, `sni`                                               |
+| `wireguard` WireGuard  | `wg://`, `wireguard://`                          | link + Clash / Surge `[WireGuard]`                                                    | keys, `self-ip`, DNS, MTU, peers                                |
+| `snell` Snell          | `snell://`                                       | link + Clash / Surge                                                                  | `psk`, `obfs`, `version`                                        |
+| `hysteria` Hysteria v1 | `hysteria://`                                    | link + Clash                                                                          | legacy `up`/`down`, obfs, auth                                  |
+| `Netch`                | `Netch://`                                       | link                                                                                  | Netch share format                                              |
 
 Node manipulation matchers: `!!GROUP=`, `!!GROUPID=`/`!!INSERT=`, `!!TYPE=`,
 `!!PORT=`, `!!SERVER=`, plus rename/emoji/sub-filter rules.
@@ -370,10 +370,13 @@ available programmatically via `convertUserinfo`,
 ## Programmatic use
 
 ```ts
-import { generate, parseSubscription, TargetFormat } from "@subconverter/core";
+import { convertNodes, generate, parseSubscription, TargetFormat } from "@subconverter/core";
 
 const nodes = parseSubscription(await response.text());
-const clash = generate(nodes, { target: TargetFormat.Clash });
+const clash = generate(nodes, { target: TargetFormat.Clash }); // nodes are left untouched
+
+// Same conversion, but also report the nodes that survived rename/filters:
+const { output, nodes: effective } = convertNodes(nodes, { target: TargetFormat.Clash });
 ```
 
 ```ts

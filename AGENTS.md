@@ -26,12 +26,13 @@ Run from the repo root:
 | Test       | `npm test`                               |
 | Coverage   | `npm run test:coverage -w packages/core` |
 | Format     | `npm run format`                         |
+| Knip       | `npm run knip`                           |
 | Docs (API) | `npm run docs:api`                       |
 | Check      | `npm run check`                          |
 | Packages   | `npm run check:packages`                 |
 
-Before committing: `npm run check` (typecheck + lint + test + doc freshness) must be
-green. The
+Before committing: `npm run check` (typecheck + lint + format + test + doc freshness +
+knip) must be green. The
 `.githooks/pre-commit` and `pre-push` hooks run the same gate via
 `docs/scripts/check.sh`; enable them once per clone with
 `./docs/scripts/setup-git-hooks.sh`. Commit messages follow

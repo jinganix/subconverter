@@ -1,10 +1,12 @@
 #!/usr/bin/env sh
 branch="$(git rev-parse --abbrev-ref HEAD)"
 
-if [ "$branch" = "master" ]; then
-  echo "Never push to [$branch] directly"
-  exit 1
-fi
+case "$branch" in
+  main | master)
+    echo "Never push to [$branch] directly"
+    exit 1
+    ;;
+esac
 
 ROOT=$(git rev-parse --show-toplevel)
 "$ROOT/docs/scripts/check.sh"

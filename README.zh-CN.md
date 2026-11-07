@@ -69,22 +69,22 @@ Clash YAML → Surge INI → base64/明文链接列表）。
 `packages/core/src/parser/uri.ts` 的 `explode*` 解析；无链接格式的协议
 （标注“仅配置”）来自 Clash/Surge 解析器。
 
-| 协议（`ProxyType`）    | 链接格式                                       | 输入来源                                                          | 传输 / TLS 说明                                                  |
-| ---------------------- | ---------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `ss` Shadowsocks       | `ss://`                                        | 链接（SIP002 含 AEAD-2022 明文 userinfo、明文、`simple-obfs`/`v2ray-plugin`） | 保留 obfs / v2ray-plugin 参数 |
-| `ssr` ShadowsocksR     | `ssr://`                                       | 链接                                                              | `origin`/`plain` 的 SSR 在纯 SS 目标中可降级为 SS                |
-| `vmess` VMess          | `vmess://`、`vmess1://`                        | 链接（v2rayN JSON、Shadowrocket、Kitsunebi、Quantumult 分享格式） | `tcp`/`ws`；`tls`；`aid`/`aead`                                  |
-| `vless` VLESS          | `vless://`                                     | 链接                                                              | `tcp`/`ws`/`grpc`；`tls`/`reality`，支持 `flow`/`fp`/`pbk`/`sid` |
-| `trojan` Trojan        | `trojan://`                                    | 链接（直连 / `ws`）                                               | `sni`/`host`/`path`                                              |
-| `socks5` SOCKS5        | `socks://`、`tg://socks`、`https://t.me/socks` | 链接（含 Telegram）                                               | 可选认证 / TLS                                                   |
-| `http`/`https` HTTP    | 凭证 URL、`tg://http`、`https://t.me/http`     | 链接（含 Telegram、`http://` 凭证列表）                           | `username:password@host:port`                                    |
-| `hysteria2` Hysteria2  | `hysteria2://`、`hy2://`                       | 链接                                                              | `password`、`sni`、速率、指纹                                    |
-| `tuic` TUIC            | `tuic://`                                      | 链接                                                              | `uuid`/`password`、拥塞控制                                      |
-| `anytls` AnyTLS        | `anytls://`                                    | 链接                                                              | `password`、`sni`                                                |
-| `wireguard` WireGuard  | `wg://`、`wireguard://`                           | 链接 + Clash / Surge `[WireGuard]`                                | 密钥、`self-ip`、DNS、MTU、对端                                  |
-| `snell` Snell          | `snell://`                                       | 链接 + Clash / Surge                                              | `psk`、`obfs`、`version`                                         |
-| `hysteria` Hysteria v1 | `hysteria://`                                    | 链接 + Clash                                                      | 旧版 `up`/`down`、obfs、auth                                     |
-| `Netch`                | `Netch://`                                     | 链接                                                              | Netch 分享格式                                                   |
+| 协议（`ProxyType`）    | 链接格式                                       | 输入来源                                                                      | 传输 / TLS 说明                                                  |
+| ---------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `ss` Shadowsocks       | `ss://`                                        | 链接（SIP002 含 AEAD-2022 明文 userinfo、明文、`simple-obfs`/`v2ray-plugin`） | 保留 obfs / v2ray-plugin 参数                                    |
+| `ssr` ShadowsocksR     | `ssr://`                                       | 链接                                                                          | `origin`/`plain` 的 SSR 在纯 SS 目标中可降级为 SS                |
+| `vmess` VMess          | `vmess://`、`vmess1://`                        | 链接（v2rayN JSON、Shadowrocket、Kitsunebi、Quantumult 分享格式）             | `tcp`/`ws`；`tls`；`aid`/`aead`                                  |
+| `vless` VLESS          | `vless://`                                     | 链接                                                                          | `tcp`/`ws`/`grpc`；`tls`/`reality`，支持 `flow`/`fp`/`pbk`/`sid` |
+| `trojan` Trojan        | `trojan://`                                    | 链接（直连 / `ws`）                                                           | `sni`/`host`/`path`                                              |
+| `socks5` SOCKS5        | `socks://`、`tg://socks`、`https://t.me/socks` | 链接（含 Telegram）                                                           | 可选认证 / TLS                                                   |
+| `http`/`https` HTTP    | 凭证 URL、`tg://http`、`https://t.me/http`     | 链接（含 Telegram、`http://` 凭证列表）                                       | `username:password@host:port`                                    |
+| `hysteria2` Hysteria2  | `hysteria2://`、`hy2://`                       | 链接                                                                          | `password`、`sni`、速率、指纹                                    |
+| `tuic` TUIC            | `tuic://`                                      | 链接                                                                          | `uuid`/`password`、拥塞控制                                      |
+| `anytls` AnyTLS        | `anytls://`                                    | 链接                                                                          | `password`、`sni`                                                |
+| `wireguard` WireGuard  | `wg://`、`wireguard://`                        | 链接 + Clash / Surge `[WireGuard]`                                            | 密钥、`self-ip`、DNS、MTU、对端                                  |
+| `snell` Snell          | `snell://`                                     | 链接 + Clash / Surge                                                          | `psk`、`obfs`、`version`                                         |
+| `hysteria` Hysteria v1 | `hysteria://`                                  | 链接 + Clash                                                                  | 旧版 `up`/`down`、obfs、auth                                     |
+| `Netch`                | `Netch://`                                     | 链接                                                                          | Netch 分享格式                                                   |
 
 节点操作匹配器：`!!GROUP=`、`!!GROUPID=`/`!!INSERT=`、`!!TYPE=`、`!!PORT=`、
 `!!SERVER=`，以及重命名/emoji/子筛选规则。
@@ -287,7 +287,7 @@ URL（拒绝本地路径）；`[]RULE` 内联规则集不受影响。
 - `surge_version`（别名 `surge-version`、`ver`、`version`；默认 `5`）——Surge 目标版本；
   注意默认值与上游 subconverter / subconverter-rs（`3`）不同。
 - `flavor`（默认 `mihomo`）——Clash 内核：`mihomo`（默认，全量输出）、`premium`
- （丢弃 VLESS/Hysteria/Hysteria2/TUIC/AnyTLS，剥离 `client-fingerprint` 与
+  （丢弃 VLESS/Hysteria/Hysteria2/TUIC/AnyTLS，剥离 `client-fingerprint` 与
   `reality-opts`）、`stash`（丢弃 AnyTLS，剥离指纹，保留 reality）。
 - `expand`（默认 `true`）——`false` 时 Surge/Surfboard 对远端规则集输出
   `RULE-SET,url,group` 引用而不内联（Clash 恒为内联）。
@@ -348,10 +348,13 @@ GET /sub?target=clash&url=<订阅>&userinfo_url=<流量接口>&userinfo_provider
 ## 编程调用
 
 ```ts
-import { generate, parseSubscription, TargetFormat } from "@subconverter/core";
+import { convertNodes, generate, parseSubscription, TargetFormat } from "@subconverter/core";
 
 const nodes = parseSubscription(await response.text());
-const clash = generate(nodes, { target: TargetFormat.Clash });
+const clash = generate(nodes, { target: TargetFormat.Clash }); // 不会修改传入的 nodes
+
+// 同样的转换，同时拿到经重命名/筛选后实际输出的节点：
+const { output, nodes: effective } = convertNodes(nodes, { target: TargetFormat.Clash });
 ```
 
 ```ts
