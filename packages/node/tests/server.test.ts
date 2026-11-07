@@ -306,6 +306,30 @@ describe("convertSubRequest", () => {
     expect(result.body).toContain("Proxy:");
   });
 
+  it("tags the Nth url with group id N so !!GROUPID selects one source", async () => {
+    stubFetch((url) => {
+      if (url.endsWith("/a")) {
+        return new Response("trojan://pw@1.2.3.4:443#A", { status: 200 });
+      }
+      if (url.endsWith("/b")) {
+        return new Response("trojan://pw@5.6.7.8:443#B", { status: 200 });
+      }
+      // External config: a select group containing only the second source's nodes.
+      return new Response("[custom]\ncustom_proxy_group=G`select`!!GROUPID=1!!.*\n", {
+        status: 200,
+      });
+    });
+    const raw =
+      "target=clash&url=https%3A%2F%2Fexample.com%2Fa&url=https%3A%2F%2Fexample.com%2Fb" +
+      "&config=https%3A%2F%2Fexample.com%2Fcfg.ini&no_rules=true";
+    const result = await convertSubRequest(raw, new URLSearchParams(raw));
+    expect(result.body).toContain("name: A");
+    expect(result.body).toContain("name: B");
+    const group = result.body.slice(result.body.indexOf("name: G"));
+    expect(group).toContain("- B");
+    expect(group).not.toContain("- A");
+  });
+
   it("emits bundled rules by default and strips them with no_rules", async () => {
     stubFetch(() => new Response(SUB_BODY, { status: 200 }));
     const params = new URLSearchParams({ target: "clash", url: "https://example.com/sub" });
@@ -458,6 +482,14 @@ describe("startServer", () => {
       expect(response.headers.get("subscription-userinfo")).toContain("download=11");
       const text = await response.text();
       expect(text).toContain("Node");
+      const named = await fetch(
+        `http://127.0.0.1:${String(port)}/sub?target=clash` +
+          `&url=${encodeURIComponent("https://example.com/sub")}` +
+          `&filename=${encodeURIComponent("配置.yaml")}`,
+      );
+      const disposition = named.headers.get("content-disposition") ?? "";
+      expect(disposition).toContain("filename*=UTF-8''%E9%85%8D%E7%BD%AE.yaml");
+      await named.body?.cancel();
       const missing = await fetch(`http://127.0.0.1:${String(port)}/sub?target=clash`);
       expect(missing.status).toBe(400);
     } finally {

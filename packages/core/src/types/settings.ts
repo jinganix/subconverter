@@ -90,6 +90,10 @@ export interface ExtraSettings {
   sortFlag: boolean;
   filterDeprecated: boolean;
   clashNewFieldName: boolean;
+  /**
+   * Accepted for upstream `clash_script` compatibility; the generators do not
+   * emit script rules, so this currently has no effect.
+   */
   clashScript: boolean;
   clashClassicalRuleset: boolean;
   /** Target Clash kernel: dropped protocols/fields follow its capabilities. */
@@ -98,15 +102,33 @@ export interface ExtraSettings {
   templateVars: Record<string, string>;
   dedupe: boolean;
   surgeSsrPath: string;
+  /**
+   * Upstream parity placeholder (`managed_config_prefix`): the server emits
+   * `#!MANAGED-CONFIG` itself, so setting this field has no effect.
+   */
   managedConfigPrefix: string;
+  /**
+   * Upstream parity placeholder (`quanx_dev_id` / `dev_id`): no generator uses
+   * it (upstream's C++ port stores it without emitting it either).
+   */
   quanxDevId: string;
   udp: TriBool;
   tfo: TriBool;
   skipCertVerify: TriBool;
   tls13: TriBool;
+  /** Upstream parity placeholder (`sort_script`): scripts are not executed. */
   sortScript: string;
+  /**
+   * Upstream parity placeholder (`clash_proxies_style`): Clash output is always
+   * block style; `flow`/`block` is accepted but ignored.
+   */
   clashProxiesStyle: string;
+  /**
+   * Upstream parity placeholder (`clash_proxy_groups_style`): Clash output is
+   * always block style; `flow`/`block` is accepted but ignored.
+   */
   clashProxyGroupsStyle: string;
+  /** Upstream parity placeholder (`authorized`): server auth is not implemented. */
   authorized: boolean;
 }
 

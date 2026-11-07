@@ -70,6 +70,8 @@ describe("node adapter", () => {
       { kind: "text", text: "trojan://pw@5.6.7.8:443#B" },
     ]);
     expect(nodes.map((n) => n.remark)).toEqual(["A", "B"]);
+    // Each source keeps its index as group id so `!!GROUPID=` can select it.
+    expect(nodes.map((n) => n.groupId)).toEqual([0, 1]);
   });
 
   it("prepares a conversion request", async () => {

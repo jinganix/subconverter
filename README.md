@@ -89,7 +89,9 @@ scheme) come from Clash/Surge parsers.
 | `Netch`                | `Netch://`                                       | link                                                                                  | Netch share format                                              |
 
 Node manipulation matchers: `!!GROUP=`, `!!GROUPID=`/`!!INSERT=`, `!!TYPE=`,
-`!!PORT=`, `!!SERVER=`, plus rename/emoji/sub-filter rules.
+`!!PORT=`, `!!SERVER=`, plus rename/emoji/sub-filter rules. `!!GROUPID=` matches the
+source index: nodes from the 2nd `url`/`--url` carry group id `1` (`parseSubscription(body, 1)`
+does the same for library callers).
 
 ### Output: target formats
 
@@ -337,8 +339,12 @@ Defaults are shown in parentheses; every underscore param also accepts a hyphen 
   as `true`).
 - All remaining flags parsed by `parseRequestSettings` (`rename`, `emoji`, `include`,
   `exclude`, `add_emoji`, `remove_emoji`, `append_type`, `sort`, `filter_deprecated`,
-  `dedupe`, `tfo`, `udp`, `scv`, `tls13`, `insert`, `classical`, …) accept underscore or
+  `dedupe`, `tfo`, `udp`, `scv`, `tls13`, `classical`, …) accept underscore or
   hyphen and are case-insensitive.
+- Upstream options without an effect here are still parsed for compatibility: `insert`,
+  `mixin`, `script`, `upload_path`, `auto_extract`, `proxies_style`,
+  `proxy_groups_style`, `clash_script` (and `dev_id`, which upstream's C++ port also
+  stores without using).
 
 ### Quota (`userinfo_url`)
 

@@ -54,6 +54,15 @@ describe("cli e2e", () => {
     expect(stdout).toContain("unknown");
   });
 
+  it("does not let a boolean flag swallow a positional argument", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#A");
+    for (const flag of ["--classical", "--no-expand", "--classical-ruleset", "--dedupe"]) {
+      stdout = "";
+      expect(await runCli(["convert", flag, path, "--target", "clash"])).toBe(0);
+      expect(stdout).toContain("proxies:");
+    }
+  });
+
   it("converts a file to Clash on stdout", async () => {
     const path = await writeSub("trojan://pw@1.2.3.4:443#A\ntrojan://pw@5.6.7.8:443#B");
     expect(await runCli(["convert", "--file", path, "--target", "clash"])).toBe(0);

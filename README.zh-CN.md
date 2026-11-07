@@ -87,7 +87,8 @@ Clash YAML → Surge INI → base64/明文链接列表）。
 | `Netch`                | `Netch://`                                     | 链接                                                                          | Netch 分享格式                                                   |
 
 节点操作匹配器：`!!GROUP=`、`!!GROUPID=`/`!!INSERT=`、`!!TYPE=`、`!!PORT=`、
-`!!SERVER=`，以及重命名/emoji/子筛选规则。
+`!!SERVER=`，以及重命名/emoji/子筛选规则。`!!GROUPID=` 匹配来源序号：第 2 个
+`url`/`--url` 的节点 group id 为 `1`（库调用方等价于 `parseSubscription(body, 1)`）。
 
 ### 输出：目标格式
 
@@ -317,8 +318,11 @@ URL（拒绝本地路径）；`[]RULE` 内联规则集不受影响。
 - 布尔值接受 `true`/`false`、`1`/`0`、`yes`/`no`、`on`/`off`（裸 `?flag` 视为 `true`）。
 - `parseRequestSettings` 解析的其余开关（`rename`、`emoji`、`include`、`exclude`、
   `add_emoji`、`remove_emoji`、`append_type`、`sort`、`filter_deprecated`、`dedupe`、
-  `tfo`、`udp`、`scv`、`tls13`、`insert`、`classical`…）均接受下划线/连字符，
+  `tfo`、`udp`、`scv`、`tls13`、`classical`…）均接受下划线/连字符，
   大小写不敏感。
+- 为兼容上游而解析、但当前没有实际效果的参数：`insert`、`mixin`、`script`、
+  `upload_path`、`auto_extract`、`proxies_style`、`proxy_groups_style`、`clash_script`
+  （以及 `dev_id`——上游 C++ 版本同样只保存不使用）。
 
 ### 流量信息（`userinfo_url`）
 

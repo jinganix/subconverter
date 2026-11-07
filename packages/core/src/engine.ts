@@ -201,12 +201,33 @@ export function toSip008(nodes: Proxy[], baseConf = ""): string {
   return proxyToSsSub(nodes, baseConf);
 }
 
+/**
+ * Normalize a proxy-group name for line-based formats: `=` breaks the
+ * `name = value` split and a line break injects config lines. `[]NAME`
+ * references inside `proxies` are normalized the same way so group links stay
+ * valid.
+ */
+function processGroupName(name: string): string {
+  const normalized = name.replace(/=/g, "-").replace(/[\r\n]+/g, " ");
+  return normalized.trim() === "" ? "group" : normalized;
+}
+
+function sanitizeGroup(group: ProxyGroupConfig): ProxyGroupConfig {
+  return {
+    ...group,
+    name: processGroupName(group.name),
+    proxies: group.proxies.map((rule) =>
+      rule.startsWith("[]") ? `[]${processGroupName(rule.slice(2))}` : rule,
+    ),
+  };
+}
+
 /** Resolve effective proxy groups, injecting bundled defaults unless opted out. */
 function resolveGroups(options: GenerateOptions): ProxyGroupConfig[] {
   if (options.includeRules !== false && (!options.groups || options.groups.length === 0)) {
-    return getDefaultProxyGroups();
+    return getDefaultProxyGroups().map(sanitizeGroup);
   }
-  return options.groups ?? [];
+  return (options.groups ?? []).map(sanitizeGroup);
 }
 
 /**

@@ -110,7 +110,7 @@ export async function resolveSubscription(source: SubscriptionSource): Promise<s
   }
 }
 
-/** Load and parse a subscription source into proxy nodes. */
-export async function loadNodes(source: SubscriptionSource): Promise<Proxy[]> {
-  return parseSubscription(await resolveSubscription(source));
+/** Load and parse a subscription source into proxy nodes (tagged with `groupId`). */
+export async function loadNodes(source: SubscriptionSource, groupId = 0): Promise<Proxy[]> {
+  return parseSubscription(await resolveSubscription(source), groupId);
 }
