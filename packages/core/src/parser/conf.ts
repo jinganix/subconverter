@@ -23,6 +23,11 @@ import type { TriBool } from "../types/tribool";
 import { base64Encode } from "../utils/base64";
 import { split, toInt, trim } from "../utils/string";
 
+/** JSON array items as objects; primitives/`null` become an empty entry. */
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
 function asString(value: unknown): string {
   if (value === undefined || value === null) {
     return "";
@@ -1407,6 +1412,10 @@ export function parsePeers(node: Proxy, data: string): void {
         break;
       case "endpoint": {
         const colon = val.lastIndexOf(":");
+        if (colon === -1) {
+          node.hostname = val;
+          break;
+        }
         node.hostname = val.slice(0, colon);
         node.port = toInt(val.slice(colon + 1));
         break;
@@ -1484,13 +1493,15 @@ export function explodeSsConf(content: string, nodes: Proxy[]): void {
     return;
   }
   let index = nodes.length;
-  for (const entry of list) {
+  for (const raw of list) {
+    const entry = asRecord(raw);
     const remark = asString(entry.remarks);
     const port = asString(entry.server_port);
-    if (port === "0") {
+    const server = asString(entry.server);
+    // An entry without a server (or with a zero port) is not a usable node.
+    if (server === "" || port === "0") {
       continue;
     }
-    const server = asString(entry.server);
     const node = createProxy();
     ssConstruct(node, {
       group,
@@ -1520,7 +1531,8 @@ export function explodeSsAndroid(content: string, nodes: Proxy[]): void {
     return;
   }
   let index = nodes.length;
-  for (const entry of json.nodes) {
+  for (const raw of json.nodes) {
+    const entry = asRecord(raw);
     const server = asString(entry.server);
     if (server === "") {
       continue;
@@ -1602,11 +1614,12 @@ export function explodeSsrConf(content: string, nodes: Proxy[]): void {
   if (!Array.isArray(list)) {
     return;
   }
-  for (const entry of list) {
+  for (const raw of list) {
+    const entry = asRecord(raw);
     const group = asString(entry.group) === "" ? DEFAULT_GROUPS.ssr : asString(entry.group);
     const server = asString(entry.server);
     const port = asString(entry.server_port);
-    if (port === "0" || port === "") {
+    if (server === "" || port === "0" || port === "") {
       continue;
     }
     const remark = asString(entry.remarks) === "" ? `${server}:${port}` : asString(entry.remarks);
@@ -1710,15 +1723,18 @@ export function explodeVmessConf(content: string, nodes: Proxy[]): void {
 
   const subdata = new Map<string, string>();
   const subItems: any[] = json.subItem ?? [];
-  for (const item of subItems) {
+  for (const raw of subItems) {
+    const item = asRecord(raw);
     subdata.set(asString(item.id), asString(item.remarks));
   }
 
   const list: any[] = json.vmess ?? [];
-  for (const entry of list) {
+  for (const raw of list) {
+    const entry = asRecord(raw);
     if (
       entry.address === null ||
       entry.address === undefined ||
+      String(entry.address) === "" ||
       entry.port === null ||
       entry.id === null
     ) {
@@ -1739,7 +1755,7 @@ export function explodeVmessConf(content: string, nodes: Proxy[]): void {
       ps = `${add}:${port}`;
     }
     const scv = asTri(entry.allowInsecure);
-    const configType = toInt(entry.configType);
+    const configType = toInt(asString(entry.configType));
     const node = createProxy();
     if (configType === 1) {
       vmessConstruct(node, {
@@ -1797,17 +1813,18 @@ export function explodeSstap(content: string, nodes: Proxy[]): void {
     return;
   }
   let index = nodes.length;
-  for (const entry of json.configs) {
+  for (const raw of json.configs) {
+    const entry = asRecord(raw);
     const group = asString(entry.group);
     const server = asString(entry.server);
     const port = asString(entry.server_port);
-    if (port === "0" || port === "") {
+    if (server === "" || port === "0" || port === "") {
       continue;
     }
     const remark = asString(entry.remarks) === "" ? `${server}:${port}` : asString(entry.remarks);
     const password = asString(entry.password);
     const node = createProxy();
-    const configType = toInt(entry.type);
+    const configType = toInt(asString(entry.type));
     if (configType === 5) {
       socksConstruct(node, {
         group,

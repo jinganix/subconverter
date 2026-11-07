@@ -100,6 +100,9 @@ export interface RawIniSection {
 export function parseRawIni(content: string): RawIniSection[] {
   const text = stripBom(content);
   const sections: RawIniSection[] = [];
+  // Lines before the first `[header]` (a base config preamble) are kept in an
+  // unnamed section and rendered without a header instead of being dropped.
+  const preamble: string[] = [];
   let current: RawIniSection | undefined;
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.replace(/\s+$/, "");
@@ -112,9 +115,10 @@ export function parseRawIni(content: string): RawIniSection[] {
     if (line.trim() === "") {
       continue;
     }
-    if (current) {
-      current.lines.push(line);
-    }
+    (current?.lines ?? preamble).push(line);
+  }
+  if (preamble.length > 0) {
+    sections.unshift({ lines: preamble, name: "" });
   }
   return sections;
 }
@@ -123,7 +127,9 @@ export function parseRawIni(content: string): RawIniSection[] {
 export function renderRawIni(sections: RawIniSection[]): string {
   const out: string[] = [];
   for (const section of sections) {
-    out.push(`[${section.name}]`);
+    if (section.name !== "") {
+      out.push(`[${section.name}]`);
+    }
     out.push(...section.lines);
     out.push("");
   }

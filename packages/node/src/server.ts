@@ -681,13 +681,13 @@ export async function convertSubRequest(
   const failures: string[] = [];
   const settled = await Promise.allSettled(urls.map(async (url) => fetchSubscriptionDetailed(url)));
   const ordered = settled.map((result, index) => ({ index, result }));
-  const bodies: string[] = [];
+  const bodies: Array<{ body: string; groupId: number }> = [];
   let upstreamUserinfo: string | undefined;
   let upstreamInterval: string | undefined;
   let combinedLength = 0;
   for (const { index, result } of ordered) {
     if (result.status === "fulfilled") {
-      bodies.push(result.value.body);
+      bodies.push({ body: result.value.body, groupId: index });
       combinedLength += result.value.body.length + 1;
       if (combinedLength > MAX_BODY_BYTES * MAX_SUBSCRIPTION_URLS) {
         throw Object.assign(new Error("Combined subscription body exceeds size limit"), {
@@ -707,9 +707,11 @@ export async function convertSubRequest(
       statusCode: 502,
     });
   }
-  const combined = bodies.join("\n");
-
-  const nodes = parseSubscription(combined);
+  // Parse each source separately: upstream tags the Nth `url` with group id N
+  // so `!!GROUPID=`/`!!INSERT=` rules can select a single subscription. The
+  // trailing newline keeps `explodeSub` on its line-delimited path (matching
+  // the old joined-body parse, where a space-delimited body was never split).
+  const nodes = bodies.flatMap(({ body, groupId }) => parseSubscription(`${body}\n`, groupId));
   if (nodes.length === 0) {
     throw Object.assign(new Error("No proxy nodes found in the subscription."), {
       statusCode: 400,
@@ -918,6 +920,14 @@ export function createSubServer(options: SubServerOptions = {}): Server {
   });
 }
 
+/** `Content-Disposition` value; non-ASCII names also get RFC 5987 `filename*`. */
+function contentDisposition(filename: string): string {
+  const ascii = filename.replace(/[^\x20-\x7e]|["\\]/g, "_");
+  const base = `attachment; filename="${ascii}"`;
+  const isAscii = [...filename].every((char) => char.charCodeAt(0) < 0x80);
+  return isAscii ? base : `${base}; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
 async function handleSubRequest(
   url: string,
   method: string,
@@ -956,7 +966,7 @@ async function handleSubRequest(
   try {
     const result = await convertSubRequest(rawQuery, parsed.searchParams, options);
     res.setHeader("Content-Type", result.contentType);
-    res.setHeader("Content-Disposition", `attachment; filename="${result.filename}"`);
+    res.setHeader("Content-Disposition", contentDisposition(result.filename));
     if (result.userinfo) {
       res.setHeader("subscription-userinfo", result.userinfo);
     }

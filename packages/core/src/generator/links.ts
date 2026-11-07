@@ -230,17 +230,19 @@ export function proxyToSsd(nodes: Proxy[], group: string, userinfo: string): str
     port: 1,
   };
   if (userinfo !== "") {
-    const data = userinfo.replace(/; /g, "&");
-    const upload = getUrlArg(data, "upload");
-    const download = getUrlArg(data, "download");
-    const total = getUrlArg(data, "total");
+    // `subscription-userinfo` uses `; ` separators, but providers send both
+    // `;` and `; `" variants; normalize any spacing before reading the keys.
+    const data = userinfo.replace(/\s*;\s*/g, "&");
+    const upload = toInt(getUrlArg(data, "upload"));
+    const download = toInt(getUrlArg(data, "download"));
+    const total = toInt(getUrlArg(data, "total"));
     const expiry = getUrlArg(data, "expire");
     // SSD reports traffic in decimal GB (1 GB = 1000^3 bytes) per spec,
     // distinct from Clash `subscription-userinfo` clients that divide by
     // 1024^3 (see `scaleDecimalBytes` in userinfo.ts).
     const gb = 1000 ** 3;
-    doc.traffic_used = (Number(upload || 0) + Number(download || 0)) / gb;
-    doc.traffic_total = Number(total || 0) / gb;
+    doc.traffic_used = (upload + download) / gb;
+    doc.traffic_total = total / gb;
     if (expiry !== "") {
       const date = new Date(toInt(expiry) * 1000);
       doc.expiry = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;

@@ -70,7 +70,9 @@ const BOOLEAN_FLAGS = new Set([
   "new-name",
   "legacy",
   "legacy-field-name",
+  "classical",
   "classical-ruleset",
+  "no-expand",
   "dedupe",
   "with-rules",
   "no-rules",
@@ -237,6 +239,7 @@ Convert options:
       --append-type     Prefix node names with their proxy type
       --node-list       Emit a bare node list (no groups/wrapper)
       --sort            Sort nodes by name
+      --filter-deprecated  Drop nodes whose protocol the target no longer supports
       --flavor <k>      Clash kernel: mihomo (default), premium, or stash
       --classical       Emit Clash-rule-compatible payload lists verbatim
       --no-expand       Keep remote rulesets as RULE-SET references (Surge-family)
@@ -367,21 +370,24 @@ async function runConvert(state: ArgState): Promise<number> {
     return 1;
   }
 
-  let text = "";
+  const bodies: string[] = [];
   for (const source of sources) {
     if (/^https?:\/\//i.test(source)) {
-      text += `\n${await fetchSubscription(source)}`;
+      bodies.push(await fetchSubscription(source));
     } else if (source === "-") {
-      text += `\n${await readStdin()}`;
+      bodies.push(await readStdin());
     } else if (/^[a-z][a-z0-9+.-]*:\/\//i.test(source)) {
       // A proxy share link (e.g. ss://, vmess://, trojan://).
-      text += `\n${source}`;
+      bodies.push(source);
     } else {
-      text += `\n${await readFile(source, "utf-8")}`;
+      bodies.push(await readFile(source, "utf-8"));
     }
   }
 
-  const nodes = parseSubscription(text);
+  // Source N keeps group id N so `!!GROUPID=`/`!!INSERT=` rules can select it.
+  // The trailing newline keeps `explodeSub` on its line-delimited path (a
+  // single line would otherwise be split on spaces, truncating `#remarks`).
+  const nodes = bodies.flatMap((body, index) => parseSubscription(`${body}\n`, index));
   if (nodes.length === 0) {
     process.stderr.write("No proxy nodes found in the input.\n");
     return 1;
@@ -397,7 +403,7 @@ async function runConvert(state: ArgState): Promise<number> {
     autoCountry: state.flags.has("auto-country")
       ? flagBool(state, "auto-country")
       : flag(state, "geoip") !== undefined,
-    clashClassicalRuleset: flagBool(state, "classical"),
+    clashClassicalRuleset: flagBool(state, "classical") || flagBool(state, "classical-ruleset"),
     clashFlavor: parseClashFlavor(flag(state, "flavor")),
     clashNewFieldName: resolveClashNewFieldName(state),
     dedupe: flagBool(state, "dedupe"),

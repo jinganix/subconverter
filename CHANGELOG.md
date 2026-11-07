@@ -9,6 +9,39 @@ Entries are written by hand, following Conventional Commits and grouped by relea
 `RELEASE` workflow (see [README](README.md#release)) generates the GitHub release notes from
 the same commits.
 
+## [Unreleased]
+
+### Changed
+
+- `packages/node` and `packages/cli` declare `engines.node >= 22` like the root package.
+- Upstream-parity-only settings (`clashScript`, `managedConfigPrefix`, `quanxDevId`,
+  `sortScript`, `clashProxiesStyle`, `clashProxyGroupsStyle`, `authorized`) are documented as
+  accepted-but-inert instead of looking functional.
+
+### Fixed
+
+- A subscription/config JSON with `null` (or scalar) entries in `servers`, `configs`,
+  `subItem`/`vmess`, or `Server` arrays crashed the whole parse; non-object entries are now
+  skipped. Entries without a `server`/`address` no longer become empty nodes.
+- `!!GROUPID=`/`!!INSERT=` rules never matched a specific source: nodes from the Nth `url`
+  now carry group id N (`parseSubscription(content, groupId)`, `loadNodes(source, groupId)`;
+  the server and CLI tag each fetched source). Previously every node had group id `0`.
+- `ssd://` output parsed `subscription-userinfo` only when separators were `"; "`; `;` without
+  a space produced `null` traffic counters. Separator spacing is now ignored and the counters
+  are parsed as integers.
+- A WireGuard Clash `peer` without a port (endpoint without `:`) lost the last hostname
+  character and invented a port.
+- `/sub` returned a `Content-Disposition` with a mangled `filename` for non-ASCII names; it
+  now sends an ASCII fallback plus RFC 5987 `filename*=UTF-8''…`.
+- Proxy-group names (and `[]NAME` references) are sanitized like node remarks: `=` and line
+  breaks no longer break (or inject lines into) Surge/Loon/QuanX/Mellow output.
+- `--classical`, `--no-expand` and `--classical-ruleset` were missing from the CLI boolean
+  flag list, so `convert --classical sub.txt` swallowed the positional and reported "No input
+  provided". Booleans are now recognized before consumption, and `--filter-deprecated` is
+  documented.
+- Lines before the first `[section]` header in a base config (e.g. `--base`) were dropped by
+  `parseRawIni`; they are preserved and rendered without a header.
+
 ## [0.5.0] - 2026-11-07
 
 ### Added

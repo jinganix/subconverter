@@ -25,6 +25,9 @@
   },
   "license": "GPL-3.0",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",

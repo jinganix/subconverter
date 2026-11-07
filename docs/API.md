@@ -412,22 +412,22 @@ Members:
 - `sortFlag` (`boolean`, required)
 - `filterDeprecated` (`boolean`, required)
 - `clashNewFieldName` (`boolean`, required)
-- `clashScript` (`boolean`, required)
+- `clashScript` (`boolean`, required) — Accepted for upstream `clash_script` compatibility; the generators do not emit script rules, so this currently has no effect.
 - `clashClassicalRuleset` (`boolean`, required)
 - `clashFlavor` (`ClashFlavor`, required) — Target Clash kernel: dropped protocols/fields follow its capabilities.
 - `templateVars` (`Record<string, string>`, required) — Template variables applied to `{{ var }}` placeholders in base configs.
 - `dedupe` (`boolean`, required)
 - `surgeSsrPath` (`string`, required)
-- `managedConfigPrefix` (`string`, required)
-- `quanxDevId` (`string`, required)
+- `managedConfigPrefix` (`string`, required) — Upstream parity placeholder (`managed_config_prefix`): the server emits `#!MANAGED-CONFIG` itself, so setting this field has no effect.
+- `quanxDevId` (`string`, required) — Upstream parity placeholder (`quanx_dev_id` / `dev_id`): no generator uses it (upstream's C++ port stores it without emitting it either).
 - `udp` (`TriBool`, required)
 - `tfo` (`TriBool`, required)
 - `skipCertVerify` (`TriBool`, required)
 - `tls13` (`TriBool`, required)
-- `sortScript` (`string`, required)
-- `clashProxiesStyle` (`string`, required)
-- `clashProxyGroupsStyle` (`string`, required)
-- `authorized` (`boolean`, required)
+- `sortScript` (`string`, required) — Upstream parity placeholder (`sort_script`): scripts are not executed.
+- `clashProxiesStyle` (`string`, required) — Upstream parity placeholder (`clash_proxies_style`): Clash output is always block style; `flow`/`block` is accepted but ignored.
+- `clashProxyGroupsStyle` (`string`, required) — Upstream parity placeholder (`clash_proxy_groups_style`): Clash output is always block style; `flow`/`block` is accepted but ignored.
+- `authorized` (`boolean`, required) — Upstream parity placeholder (`authorized`): server auth is not implemented.
 
 #### `RegexMatchConfig` (interface)
 
@@ -1429,9 +1429,12 @@ function parseLink(link: string): Proxy | undefined;
 #### `parseSubscription` (function)
 
 > Parse a config blob (Clash/SS/SSR/V2Ray/SSTap/Netch) or a subscription.
+>
+> `groupId` tags every parsed node, mirroring upstream: nodes from the Nth
+> `url` get group id N so `!!GROUPID=`/`!!INSERT=` rules can target one source.
 
 ```ts
-function parseSubscription(content: string): Proxy[];
+function parseSubscription(content: string, groupId = 0): Proxy[];
 ```
 
 ### @subconverter/core: parser/conf
@@ -2540,10 +2543,10 @@ async function fetchSubscription(url: string, options: LoadOptions = {}): Promis
 
 #### `loadNodes` (function)
 
-> Load and parse a subscription source into proxy nodes.
+> Load and parse a subscription source into proxy nodes (tagged with `groupId`).
 
 ```ts
-async function loadNodes(source: SubscriptionSource): Promise<Proxy[]>;
+async function loadNodes(source: SubscriptionSource, groupId = 0): Promise<Proxy[]>;
 ```
 
 #### `readCappedText` (function)
@@ -2676,7 +2679,7 @@ async function buildCountryResolver(
 
 #### `collectNodes` (function)
 
-> Load every source and merge the resulting nodes.
+> Load every source and merge the resulting nodes, tagging source N with group id N.
 
 ```ts
 async function collectNodes(sources: SubscriptionSource[]): Promise<Proxy[]>;

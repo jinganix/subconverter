@@ -131,13 +131,20 @@ function splitLinks(body: string, nodes: Proxy[]): void {
   }
 }
 
-/** Parse a config blob (Clash/SS/SSR/V2Ray/SSTap/Netch) or a subscription. */
-export function parseSubscription(content: string): Proxy[] {
+/**
+ * Parse a config blob (Clash/SS/SSR/V2Ray/SSTap/Netch) or a subscription.
+ *
+ * `groupId` tags every parsed node, mirroring upstream: nodes from the Nth
+ * `url` get group id N so `!!GROUPID=`/`!!INSERT=` rules can target one source.
+ */
+export function parseSubscription(content: string, groupId = 0): Proxy[] {
   const nodes: Proxy[] = [];
   const text = stripBom(content);
-  if (parseConfContent(text, nodes)) {
-    return nodes;
+  if (!parseConfContent(text, nodes)) {
+    explodeSub(text, nodes);
   }
-  explodeSub(text, nodes);
+  for (const node of nodes) {
+    node.groupId = groupId;
+  }
   return nodes;
 }

@@ -45,11 +45,11 @@ export interface ConvertInput {
   includeRules?: boolean;
 }
 
-/** Load every source and merge the resulting nodes. */
+/** Load every source and merge the resulting nodes, tagging source N with group id N. */
 export async function collectNodes(sources: SubscriptionSource[]): Promise<Proxy[]> {
   const all: Proxy[] = [];
-  for (const source of sources) {
-    all.push(...(await loadNodes(source)));
+  for (const [index, source] of sources.entries()) {
+    all.push(...(await loadNodes(source, index)));
   }
   return all;
 }
