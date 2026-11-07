@@ -57,6 +57,7 @@ export {
   split,
   startsWith,
   strFind,
+  stripBom,
   toBool,
   toInt,
   trim,
@@ -64,6 +65,7 @@ export {
 } from "./utils/string";
 export {
   getAllUrlArgs,
+  getFirstUrlArg,
   getUrlArg,
   normalizeQueryKey,
   splitUrl,
@@ -166,7 +168,14 @@ export {
   getDefaultRulesetConfigs,
   getDefaultRulesets,
 } from "./generator/default-profile";
-export { generate, runPreprocess, toSip008, type GenerateOptions } from "./engine";
+export {
+  convertNodes,
+  generate,
+  runPreprocess,
+  toSip008,
+  type ConvertedNodes,
+  type GenerateOptions,
+} from "./engine";
 export {
   CLASH_RULE_TYPES,
   QUANX_RULE_TYPES,

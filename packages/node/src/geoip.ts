@@ -129,5 +129,14 @@ export async function resolveNodeCountries(
 export function countryResolverFrom(
   codes: Map<Proxy, string>,
 ): (node: Proxy) => string | undefined {
-  return (node) => codes.get(node);
+  // Country depends only on the server hostname, so key by host too: the
+  // engine copies nodes before preprocessing, which would break identity keys.
+  const byHost = new Map<string, string>();
+  for (const [node, code] of codes) {
+    const host = node.hostname.trim();
+    if (host !== "" && !byHost.has(host)) {
+      byHost.set(host, code);
+    }
+  }
+  return (node) => byHost.get(node.hostname.trim()) ?? codes.get(node);
 }

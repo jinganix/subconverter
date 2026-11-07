@@ -334,15 +334,7 @@ describe("cli auto country", () => {
   it("requires --geoip with country filters", async () => {
     const path = await writeSub("trojan://pw@1.2.3.4:443#server1");
     expect(
-      await runCli([
-        "convert",
-        "--file",
-        path,
-        "--target",
-        "clash",
-        "--include-country",
-        "US",
-      ]),
+      await runCli(["convert", "--file", path, "--target", "clash", "--include-country", "US"]),
     ).toBe(1);
     expect(stderr).toContain("--geoip");
   });
@@ -428,5 +420,282 @@ describe("cli name regex and removal", () => {
       ]),
     ).toBe(0);
     expect(stdout).toContain("name: server1");
+  });
+});
+
+describe("cli argument parsing", () => {
+  it("accepts --flag=value and short flags", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#A");
+    stdout = "";
+    expect(await runCli(["convert", `--target=clash`, "--file", path, "--no-rules"])).toBe(0);
+    expect(stdout).toContain("proxies:");
+    stdout = "";
+    expect(await runCli(["convert", "-t", "surge", "-f", path, "-H", "127.0.0.1"])).toBe(0);
+    expect(stdout).toContain("[Proxy]");
+  });
+
+  it("accepts an explicit boolean value after a flag", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#B\ntrojan://pw@5.6.7.8:443#A");
+    stdout = "";
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "clash",
+        "--no-rules",
+        "--sort",
+        "false",
+      ]),
+    ).toBe(0);
+    expect(stdout.indexOf("name: B")).toBeLessThan(stdout.indexOf("name: A"));
+  });
+
+  it("parses emoji and rename rules with and without a delimiter", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#US node");
+    stdout = "";
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "clash",
+        "--no-rules",
+        "--emoji",
+        "US@🇺🇸",
+        "--add-emoji",
+        "--rename",
+        "node",
+      ]),
+    ).toBe(0);
+    expect(stdout).toContain("🇺🇸 US ");
+    // A rule without `@` matches the whole name and removes it; the empty
+    // result is discarded, so the original name is kept.
+    stdout = "";
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "clash",
+        "--no-rules",
+        "--rename",
+        "US node",
+      ]),
+    ).toBe(0);
+    expect(stdout).toContain("name: US node");
+  });
+
+  it("trims --name-remove lists and merges a local --base", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#foo.server1.bar");
+    const base = join(dir, "base.conf");
+    await writeFile(base, "[General]\nloglevel = warning\n", "utf-8");
+    stdout = "";
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "surge",
+        "--no-rules",
+        "--name-remove",
+        " foo , bar ",
+        "--base",
+        base,
+      ]),
+    ).toBe(0);
+    expect(stdout).toContain("[General]");
+    expect(stdout).toContain("server1 =");
+  });
+
+  it("reports missing links and honours --with-rules=false", async () => {
+    expect(await runCli(["parse"])).toBe(1);
+    expect(stderr).toContain("No links");
+    const path = await writeSub("trojan://pw@1.2.3.4:443#A");
+    stdout = "";
+    expect(
+      await runCli(["convert", "--file", path, "--target", "clash", "--with-rules=false"]),
+    ).toBe(0);
+    expect(stdout).not.toContain("rules:");
+  });
+
+  it("fails when the GeoIP database cannot be loaded", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#A");
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "clash",
+        "--geoip",
+        join(dir, "missing.mmdb"),
+      ]),
+    ).toBe(1);
+    expect(stderr).toContain("Failed to load GeoIP");
+  });
+});
+
+describe("cli external config coverage", () => {
+  it("merges every [custom] key and template variables", async () => {
+    const sub = await writeSub(
+      "trojan://pw@1.2.3.4:443#US-server1\ntrojan://pw@5.6.7.8:443#NL-server2",
+    );
+    const configPath = join(dir, "external.ini");
+    await writeFile(
+      configPath,
+      [
+        "[custom]",
+        "include_remarks=server1",
+        "exclude_remarks=never",
+        "add_emoji=false",
+        "remove_emoji=false",
+        "auto_country=false",
+        "enable_rule_generator=false",
+        "overwrite_original_rules=false",
+        "name_remove=.com",
+        "[template]",
+        "clash.dns.port=7874",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+    const base = join(dir, "base.yaml");
+    await writeFile(base, "dns:\n  port: {{ clash.dns.port }}\n", "utf-8");
+    stdout = "";
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        sub,
+        "--target",
+        "clash",
+        "--config",
+        configPath,
+        "--base",
+        base,
+      ]),
+    ).toBe(0);
+    expect(stdout).toContain("port: 7874");
+    expect(stdout).toContain("US-server1");
+    expect(stdout).not.toContain("NL-server2");
+    expect(stdout).not.toContain("rules:");
+  });
+
+  it("reads the subscription body from stdin with -", async () => {
+    const { Readable } = await import("node:stream");
+    const stdin = Object.getOwnPropertyDescriptor(process, "stdin");
+    Object.defineProperty(process, "stdin", {
+      configurable: true,
+      value: Readable.from([Buffer.from("trojan://pw@1.2.3.4:443#A\n")]),
+    });
+    try {
+      stdout = "";
+      expect(await runCli(["convert", "-", "--target", "clash", "--no-rules"])).toBe(0);
+      expect(stdout).toContain("name: A");
+    } finally {
+      if (stdin) {
+        Object.defineProperty(process, "stdin", stdin);
+      }
+    }
+  });
+
+  it("fails when filtering removes every node", async () => {
+    const { buildGeoIpFixture } = await import("../../node/tests/mmdb-fixture");
+    const geoipPath = join(dir, "geo.mmdb");
+    await writeFile(geoipPath, buildGeoIpFixture({ "1.2.3.4": "US" }));
+    const path = await writeSub("trojan://pw@1.2.3.4:443#server1");
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "clash",
+        "--geoip",
+        geoipPath,
+        "--include-country",
+        "JP",
+      ]),
+    ).toBe(1);
+    expect(stderr).toContain("No proxy nodes left");
+  });
+});
+
+describe("cli remote sources and flag variants", () => {
+  it("fetches --url, remote --config, remote --base and repeatable flags", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: unknown) => {
+        const url = String(input);
+        if (url.includes("config")) {
+          return new Response("[custom]\nruleset=G,[]GEOIP,CN\n", { status: 200 });
+        }
+        if (url.includes("base")) {
+          return new Response("[General]\nloglevel = warning\n", { status: 200 });
+        }
+        return new Response("trojan://pw@1.2.3.4:443#Node", { status: 200 });
+      }),
+    );
+    stdout = "";
+    expect(
+      await runCli([
+        "convert",
+        "--url",
+        "https://example.com/sub",
+        "-u",
+        "https://example.com/sub2",
+        "-t",
+        "surge",
+        "-o",
+        join(dir, "out.conf"),
+        "-g",
+        "Auto",
+        "-e",
+        "Node@🌟",
+        "-r",
+        "Node@Renamed",
+        "--config",
+        "https://example.com/config",
+        "--base",
+        "https://example.com/base",
+        "--dev-id",
+        "dev",
+        "--no-expand",
+        "--classical",
+        "--filter-deprecated",
+        "--surge-version",
+        "4",
+      ]),
+    ).toBe(0);
+    const { readFile } = await import("node:fs/promises");
+    const written = await readFile(join(dir, "out.conf"), "utf-8");
+    expect(written).toContain("[General]");
+    expect(written).toContain("Renamed");
+    expect(stderr).toContain("Wrote 2 nodes");
+    vi.unstubAllGlobals();
+  });
+
+  it("switches Clash field names with --legacy and --new-field-name=false", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#A");
+    for (const flags of [["--legacy"], ["--new-field-name=false"], ["--legacy-field-name"]]) {
+      stdout = "";
+      expect(await runCli(["convert", "--file", path, "--target", "clash", ...flags])).toBe(0);
+      expect(stdout).toContain("Proxy:");
+      expect(stdout).not.toContain("proxy-groups:");
+    }
+  });
+
+  it("uses the new field names by default and with --new-field-name", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#A");
+    stdout = "";
+    expect(await runCli(["convert", "--file", path, "--target", "clash", "--new-field-name"])).toBe(
+      0,
+    );
+    expect(stdout).toContain("proxies:");
   });
 });

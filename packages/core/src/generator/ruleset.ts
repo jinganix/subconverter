@@ -1,6 +1,7 @@
 import { parseRulesetSource } from "../settings/config";
 import type { RulesetContent, RulesetType } from "../types/ruleset";
 import { RulesetType as RulesetTypeEnum } from "../types/ruleset";
+import { isIpv4 } from "../utils/string";
 
 const BASIC_TYPES = [
   "DOMAIN",
@@ -62,11 +63,6 @@ export const SURF_RULE_TYPES = [
   "DEST-PORT",
   "SRC-IP",
 ];
-
-function isIpv4(value: string): boolean {
-  const parts = value.split(".");
-  return parts.length === 4 && parts.every((p) => /^\d{1,3}$/.test(p) && Number(p) <= 255);
-}
 
 function stripComment(line: string): string {
   const idx = line.indexOf("//");

@@ -563,3 +563,221 @@ describe("convertSubRequest auto_country", () => {
     expect((error as { statusCode?: number }).statusCode).toBe(400);
   });
 });
+
+describe("convertSubRequest external config flags", () => {
+  it("honours [custom] switches from a fetched config like the CLI does", async () => {
+    const config = "[custom]\nenable_rule_generator=false\n";
+    stubFetch((url) => {
+      if (url.includes("config")) {
+        return new Response(config, { status: 200 });
+      }
+      return new Response(SUB_BODY, { status: 200 });
+    });
+    const raw =
+      "target=clash&url=https%3A%2F%2Fexample.com%2Fsub" +
+      "&config=https%3A%2F%2Fexample.com%2Fconfig";
+    const result = await convertSubRequest(raw, new URLSearchParams(raw));
+    expect(result.body).not.toContain("rules:");
+    expect(result.body).toContain("name: Node");
+  });
+});
+
+describe("convertSubRequest config errors", () => {
+  it("fails the request instead of silently dropping a broken config", async () => {
+    stubFetch(() => new Response(SUB_BODY, { status: 200 }));
+    const raw = "target=clash&url=https%3A%2F%2Fexample.com%2Fsub" + "&config=%2Fetc%2Fpasswd";
+    await expect(convertSubRequest(raw, new URLSearchParams(raw))).rejects.toThrow(
+      /Local config paths are disabled/,
+    );
+  });
+});
+
+describe("server HTTP routes", () => {
+  async function withServer(
+    fn: (base: string) => Promise<void>,
+    options: { geoipPath?: string } = {},
+  ): Promise<void> {
+    stubFetch(() => new Response(SUB_BODY, { status: 200 }));
+    const { createSubServer } = await import("../src/index");
+    const server = createSubServer(options);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (typeof address !== "object" || address === null) {
+      throw new Error("server did not bind a port");
+    }
+    try {
+      await fn(`http://127.0.0.1:${String(address.port)}`);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  }
+
+  it("answers usage, version, 404, 405, OPTIONS and HEAD", async () => {
+    await withServer(async (base) => {
+      const root = await fetch(`${base}/`);
+      expect(root.status).toBe(200);
+      expect(await root.text()).toContain("Usage");
+      const version = await fetch(`${base}/version`);
+      expect(await version.text()).toContain("subconverter-ts");
+      expect((await fetch(`${base}/nope`)).status).toBe(404);
+      expect((await fetch(`${base}/sub`, { method: "POST" })).status).toBe(405);
+      const preflight = await fetch(`${base}/sub`, { method: "OPTIONS" });
+      expect(preflight.status).toBe(204);
+      expect(preflight.headers.get("Access-Control-Allow-Methods")).toBe("GET, OPTIONS");
+      const head = await fetch(`${base}/sub?target=clash&url=https%3A%2F%2Fexample.com%2Fsub`, {
+        method: "HEAD",
+      });
+      expect(head.status).toBe(200);
+      expect(await head.text()).toBe("");
+    });
+  });
+
+  it("returns the error status and message of a failed conversion", async () => {
+    await withServer(async (base) => {
+      const response = await fetch(`${base}/sub?target=bogus&url=https%3A%2F%2Fexample.com%2Fsub`);
+      expect(response.status).toBe(400);
+      expect(await response.text()).toContain("Unknown target format");
+    });
+  });
+});
+
+describe("server fetch guards", () => {
+  it("blocks hex and octal loopback spellings", async () => {
+    stubFetch(() => new Response(SUB_BODY, { status: 200 }));
+    for (const blocked of [
+      "http://0x7f.0.0.1/sub",
+      "http://0177.0.0.1/sub",
+      "http://[::ffff:10.0.0.1]/sub",
+      "http://[fe80::1]/sub",
+      "http://metadata.google.internal/sub",
+      "http://printer.local/sub",
+    ]) {
+      const params = new URLSearchParams({ target: "clash", url: blocked });
+      await expect(convertSubRequest(params.toString(), params)).rejects.toThrow(
+        /Private or loopback|Only http/,
+      );
+    }
+  });
+
+  it("re-validates every redirect hop and gives up after too many", async () => {
+    let hops = 0;
+    stubFetch((url) => {
+      hops += 1;
+      if (url.includes("loop")) {
+        return new Response(null, { headers: { location: url }, status: 302 });
+      }
+      if (url.includes("to-private")) {
+        return new Response(null, {
+          headers: { location: "http://169.254.169.254/" },
+          status: 302,
+        });
+      }
+      if (url.includes("no-location")) {
+        return new Response(null, { headers: {}, status: 302 });
+      }
+      if (url.includes("/ok")) {
+        return new Response(SUB_BODY, { status: 200 });
+      }
+      return new Response(null, {
+        headers: { location: url.replace("landing", "ok") },
+        status: 302,
+      });
+    });
+    const redirects = async (url: string): Promise<void> => {
+      const params = new URLSearchParams({ target: "clash", url });
+      await convertSubRequest(params.toString(), params);
+    };
+    await expect(redirects("https://example.com/landing")).resolves.toBeUndefined();
+    for (const [url, expected] of [
+      ["https://example.com/to-private", /Private or loopback/],
+      ["https://example.com/no-location", /Redirect without location/],
+      ["https://example.com/loop", /Too many redirects/],
+    ] as const) {
+      const params = new URLSearchParams({ target: "clash", url });
+      // Per-URL failures are aggregated into one 502 for the caller.
+      await expect(convertSubRequest(params.toString(), params)).rejects.toThrow(expected);
+    }
+    expect(hops).toBeGreaterThan(3);
+  });
+
+  it("maps an aborted fetch to a 504 and caps oversized bodies", async () => {
+    let called = 0;
+    stubFetch(() => {
+      called += 1;
+      throw Object.assign(new Error("aborted"), { name: "AbortError" });
+    });
+    const params = new URLSearchParams({ target: "clash", url: "https://example.com/sub" });
+    expect(called).toBe(0);
+    const outcome = await Promise.allSettled([convertSubRequest(params.toString(), params)]);
+    console.log("CALLED", called, outcome[0]?.status);
+    expect(outcome[0]?.status).toBe("rejected");
+
+    stubFetch(
+      () =>
+        new Response(SUB_BODY, {
+          headers: { "content-length": String(6 * 1024 * 1024) },
+          status: 200,
+        }),
+    );
+    const second = await Promise.allSettled([convertSubRequest(params.toString(), params)]);
+    console.log(
+      "SECOND",
+      called,
+      second[0]?.status,
+      second[0]?.status === "rejected" ? (second[0] as PromiseRejectedResult).reason.message : "",
+    );
+    expect(second[0]?.status).toBe("rejected");
+  });
+});
+
+describe("server request parsing edge cases", () => {
+  it("ignores inline and local rulesets in server mode", async () => {
+    stubFetch(() => new Response(SUB_BODY, { status: 200 }));
+    const raw =
+      "target=clash&url=https%3A%2F%2Fexample.com%2Fsub" +
+      "&ruleset=G1%2C%5B%5DGEOIP%2CCN" +
+      "&ruleset=G2%2C%2Fetc%2Fpasswd" +
+      "&group=A&group=%20";
+    const result = await convertSubRequest(raw, new URLSearchParams(raw));
+    expect(result.body).toContain("GEOIP,CN");
+    expect(result.body).not.toContain("passwd");
+    expect(result.body).toContain("name: A");
+  });
+
+  it("skips an inline config and ignores local base paths", async () => {
+    stubFetch(() => new Response(SUB_BODY, { status: 200 }));
+    const raw =
+      "target=clash&url=https%3A%2F%2Fexample.com%2Fsub" +
+      "&config=%5B%5DGEOIP%2CCN&base=%2Fetc%2Fhosts&filename=a%22b";
+    const result = await convertSubRequest(raw, new URLSearchParams(raw));
+    expect(result.body).toContain("name: Node");
+    expect(result.filename).toBe("ab");
+  });
+
+  it("surfaces a broken GeoIP database as a 500", async () => {
+    stubFetch(() => new Response(SUB_BODY, { status: 200 }));
+    const raw = "target=clash&url=https%3A%2F%2Fexample.com%2Fsub&auto_country=true";
+    await expect(
+      convertSubRequest(raw, new URLSearchParams(raw), { geoipPath: "missing.mmdb" }),
+    ).rejects.toMatchObject({ statusCode: 500 });
+  });
+
+  it("rejects malformed and odd host forms", async () => {
+    stubFetch(() => new Response(SUB_BODY, { status: 200 }));
+    for (const [url, expected] of [
+      ["ftp://example.com/sub", /Only http\(s\)/],
+      ["https://[::]/sub", /Private or loopback/],
+      ["http://1.2.3.4.5/sub", /Invalid url URL/],
+      ["http://256.256.256.256/sub", /Invalid url URL/],
+    ] as const) {
+      const params = new URLSearchParams({ target: "clash", url });
+      await expect(convertSubRequest(params.toString(), params)).rejects.toThrow(expected);
+    }
+    // Odd-but-valid host spellings parse as hostnames and pass the literal
+    // check; DNS decides next, so they must not be rejected up front.
+    for (const url of ["http://example.com./sub"]) {
+      const params = new URLSearchParams({ target: "clash", url });
+      await expect(convertSubRequest(params.toString(), params)).resolves.toBeDefined();
+    }
+  });
+});
