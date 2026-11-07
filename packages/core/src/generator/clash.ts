@@ -1,4 +1,4 @@
-import { stringify as yamlStringify } from "yaml";
+import { parse as yamlParse, stringify as yamlStringify } from "yaml";
 
 import { groupGenerate, processRemark } from "./nodes";
 import type { Proxy } from "../types/proxy";
@@ -663,6 +663,39 @@ export function buildClash(
     }
   }
   return { doc, nodeList };
+}
+
+/** Sections the generator owns; a base config never contributes them. */
+const BASE_OWNED_KEYS = ["Proxy", "Proxy Group", "Rule", "proxies", "proxy-groups", "rules"];
+
+/**
+ * Merge a base Clash config (YAML) with the generated document, mirroring
+ * upstream `proxyToClash`: everything the base defines (port, dns, mode, …) is
+ * kept, while proxies/proxy-groups/rules always come from the generator.
+ * A malformed base is ignored (the generated config is emitted instead of
+ * failing the whole conversion).
+ */
+export function mergeClashBase(
+  baseConf: string,
+  doc: Record<string, unknown>,
+): Record<string, unknown> {
+  if (baseConf.trim() === "") {
+    return doc;
+  }
+  let base: unknown;
+  try {
+    base = yamlParse(baseConf);
+  } catch {
+    return doc;
+  }
+  if (base === null || typeof base !== "object" || Array.isArray(base)) {
+    return doc;
+  }
+  const merged = { ...(base as Record<string, unknown>) };
+  for (const key of BASE_OWNED_KEYS) {
+    delete merged[key];
+  }
+  return { ...merged, ...doc };
 }
 
 /** Serialize a Clash document built by {@link buildClash}. */

@@ -3,10 +3,9 @@ import {
   type ProxyGroupConfig,
   type RulesetConfig,
   type RulesetContent,
-  ProxyType,
   TargetFormat,
+  convertNodes,
   createSelectGroup,
-  generate,
   parseClashFlavor,
   parseExternalConfig,
   parseLink,
@@ -312,6 +311,9 @@ async function runServe(state: ArgState): Promise<number> {
       managedPrefix: flag(state, "managed-prefix"),
       port,
     });
+    const address = server.address();
+    const boundPort = typeof address === "object" && address !== null ? address.port : port;
+    process.stdout.write(`subconverter-ts listening on http://${host}:${boundPort}/sub\n`);
     const shutdown = (): void => {
       server.close(() => {
         process.exit(0);
@@ -541,7 +543,7 @@ async function runConvert(state: ArgState): Promise<number> {
     }
   }
 
-  const output = generate(nodes, {
+  const converted = convertNodes(nodes, {
     baseConf,
     groups,
     includeRules,
@@ -550,17 +552,17 @@ async function runConvert(state: ArgState): Promise<number> {
     surgeVersion,
     target,
   });
-  if (nodes.length === 0) {
+  if (converted.nodes.length === 0) {
     process.stderr.write("No proxy nodes left after include/exclude filtering.\n");
     return 1;
   }
 
   const outPath = flag(state, "out");
   if (outPath) {
-    await writeOutputFile(outPath, output);
-    process.stderr.write(`Wrote ${nodes.length} nodes to ${outPath}\n`);
+    await writeOutputFile(outPath, converted.output);
+    process.stderr.write(`Wrote ${converted.nodes.length} nodes to ${outPath}\n`);
   } else {
-    process.stdout.write(output);
+    process.stdout.write(converted.output);
   }
   return 0;
 }
@@ -571,9 +573,4 @@ async function readStdin(): Promise<string> {
     chunks.push(chunk as Buffer);
   }
   return Buffer.concat(chunks).toString("utf-8");
-}
-
-/** `true` when `node.type` names a known proxy type (helper for consumers). */
-export function isKnownType(type: string): boolean {
-  return Object.values(ProxyType).includes(type as ProxyType);
 }

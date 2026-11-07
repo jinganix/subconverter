@@ -24,3 +24,14 @@ describe("browser adapter", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("browser IIFE global", () => {
+  it("exposes the API as `SubConverter` on globalThis", async () => {
+    const mod = await import("../src/global");
+    expect((globalThis as { SubConverter?: unknown }).SubConverter).toBeDefined();
+    expect(mod.default.parseSubscription).toBeTypeOf("function");
+    expect((globalThis as { SubConverter?: { loadNodes?: unknown } }).SubConverter?.loadNodes).toBe(
+      mod.default.loadNodes,
+    );
+  });
+});

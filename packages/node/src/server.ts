@@ -6,32 +6,28 @@ import {
   type RulesetContent,
   type TargetFormat,
   RulesetType,
+  convertNodes,
   convertUserinfo,
   createExtraSettings,
   createSelectGroup,
-  generate,
   getAllUrlArgs,
   getDefaultProxyGroups,
-  getUrlArg,
+  getFirstUrlArg,
   inferUserinfoProviderFromUrl,
   isBlacklistedPattern,
   parseExternalConfig,
   parseRulesetConfig,
   parseRequestSettings,
+  parseRulesetSource,
   parseSubscription,
   queryBoolFlag,
 } from "@subconverter/core";
 import { lookup as dnsLookup } from "node:dns/promises";
 import { createServer as createHttpServer, type Server, type ServerResponse } from "node:http";
 
-import {
-  buildCountryResolver,
-  detectRulesetType,
-  getCachedDefaultRulesets,
-  MAX_FETCH_BYTES,
-  parseRulesetSource,
-  readCappedText,
-} from "./index";
+import { buildCountryResolver } from "./convert";
+import { MAX_FETCH_BYTES, readCappedText } from "./fetch";
+import { detectRulesetType, getCachedDefaultRulesets } from "./ruleset-load";
 
 /** Options for {@link startServer}. */
 export interface ServeOptions {
@@ -461,23 +457,6 @@ export function contentTypeForTarget(target: string): string {
 }
 
 /**
- * Read a query value across underscore/hyphen aliases from the raw query
- * string, mirroring core `firstArg`/`getUrlArg` semantics exactly (first
- * non-empty alias wins; last occurrence wins per key; `+` preserved).
- * Parsing `rawQuery` instead of `URLSearchParams` keeps server and core in
- * agreement on decoding and precedence.
- */
-function rawFirst(rawQuery: string, ...keys: string[]): string {
-  for (const key of keys) {
-    const value = getUrlArg(rawQuery, key);
-    if (value !== "") {
-      return value;
-    }
-  }
-  return "";
-}
-
-/**
  * `true` when a ruleset URL is fetchable server-side (`http(s)` or inline).
  * Dialect prefixes (`surge:`, `clash:`, …) are stripped first so prefixed
  * remote/inline rulesets are not silently dropped.
@@ -652,7 +631,7 @@ export async function convertSubRequest(
     throw Object.assign(new Error("Invalid regex in request!"), { statusCode: 400 });
   }
 
-  const targetParam = rawFirst(rawQuery, "target").trim().toLowerCase();
+  const targetParam = getFirstUrlArg(rawQuery, "target").trim().toLowerCase();
   const target = targetParam === "" ? "clash" : targetParam;
   if (!VALID_TARGETS.has(target)) {
     throw Object.assign(
@@ -741,45 +720,48 @@ export async function convertSubRequest(
   const rulesetConfigs = parseRulesetParams(rawQuery).filter((config) =>
     isServerRulesetUrl(config.url),
   );
-  const configParam = rawFirst(rawQuery, "config");
-  let templateVars: Record<string, string> = {};
+  const configParam = getFirstUrlArg(rawQuery, "config");
+  const templateVars: Record<string, string> = {};
+  // `[custom]` switches from an external config apply to the server too, so a
+  // `config=` URL behaves exactly like the CLI `--config` flag.
+  let configRules: { enableRuleGenerator: boolean; overwriteOriginalRules: boolean } | undefined;
   if (configParam !== "" && !configParam.startsWith("[]")) {
-    try {
-      const raw = await loadExternalConfig(configParam);
-      if (raw !== "") {
-        const external = parseExternalConfig(raw);
-        groups.push(...external.groups);
-        // Apply the same server-side filter to config-provided rulesets so a
-        // malicious config cannot pull local files via `loadRuleset`.
-        rulesetConfigs.push(
-          ...external.rulesets.filter((config) => isServerRulesetUrl(config.url)),
-        );
-        if (rulesetConfigs.length > MAX_RULESETS) {
-          throw Object.assign(new Error(`Too many rulesets (max ${String(MAX_RULESETS)}).`), {
-            statusCode: 400,
-          });
-        }
-        request.rename.push(...external.rename);
-        request.emoji.push(...external.emoji);
-        request.nameRegex.push(...external.nameRegex);
-        request.nameRemove.push(...external.nameRemove);
-        request.includeRemarks.push(...external.includeRemarks);
-        request.excludeRemarks.push(...external.excludeRemarks);
-        request.includeCountries.push(...external.includeCountries);
-        request.excludeCountries.push(...external.excludeCountries);
-        if (external.addEmoji) {
-          request.addEmoji = true;
-        }
-        if (external.removeEmoji) {
-          request.removeEmoji = true;
-        }
-        if (external.autoCountry) {
-          request.autoCountry = true;
-        }
-        templateVars = { ...external.templateVars };
+    // A broken `config=` URL is surfaced like a broken subscription (upstream
+    // fails the request too) instead of silently falling back to defaults.
+    const raw = await loadExternalConfig(configParam);
+    if (raw !== "") {
+      const external = parseExternalConfig(raw);
+      groups.push(...external.groups);
+      // Apply the same server-side filter to config-provided rulesets so a
+      // malicious config cannot pull local files via `loadRuleset`.
+      rulesetConfigs.push(...external.rulesets.filter((config) => isServerRulesetUrl(config.url)));
+      if (rulesetConfigs.length > MAX_RULESETS) {
+        throw Object.assign(new Error(`Too many rulesets (max ${String(MAX_RULESETS)}).`), {
+          statusCode: 400,
+        });
       }
-    } catch (error) {
-      failures.push(`config: ${error instanceof Error ? error.message : String(error)}`);
+      request.rename.push(...external.rename);
+      request.emoji.push(...external.emoji);
+      request.nameRegex.push(...external.nameRegex);
+      request.nameRemove.push(...external.nameRemove);
+      request.includeRemarks.push(...external.includeRemarks);
+      request.excludeRemarks.push(...external.excludeRemarks);
+      request.includeCountries.push(...external.includeCountries);
+      request.excludeCountries.push(...external.excludeCountries);
+      if (external.addEmoji) {
+        request.addEmoji = true;
+      }
+      if (external.removeEmoji) {
+        request.removeEmoji = true;
+      }
+      if (external.autoCountry) {
+        request.autoCountry = true;
+      }
+      Object.assign(templateVars, external.templateVars);
+      configRules = {
+        enableRuleGenerator: external.enableRuleGenerator,
+        overwriteOriginalRules: external.overwriteOriginalRules,
+      };
     }
   }
 
@@ -796,6 +778,10 @@ export async function convertSubRequest(
   // (including external-config entries pushed above); do not append again.
   const settings = toExtraSettings(request, rawQuery);
   settings.templateVars = templateVars;
+  if (configRules !== undefined) {
+    settings.enableRuleGenerator = configRules.enableRuleGenerator;
+    settings.overwriteOriginalRules = configRules.overwriteOriginalRules;
+  }
   // A configured database turns country prefixes on by default, so mounting a
   // `.mmdb` is enough to get `US-server1`; `auto_country=false` opts out.
   // Country filters (`include_country`/`exclude_country`) also need the
@@ -811,11 +797,17 @@ export async function convertSubRequest(
     settings.includeCountries.length > 0 ||
     settings.excludeCountries.length > 0;
 
-  const surgeVersionRaw = rawFirst(rawQuery, "surge_version", "surge-version", "ver", "version");
+  const surgeVersionRaw = getFirstUrlArg(
+    rawQuery,
+    "surge_version",
+    "surge-version",
+    "ver",
+    "version",
+  );
   const surgeVersion = surgeVersionRaw === "" ? 5 : Number.parseInt(surgeVersionRaw, 10) || 5;
 
   let baseConf = "";
-  const baseParam = rawFirst(rawQuery, "base");
+  const baseParam = getFirstUrlArg(rawQuery, "base");
   if (baseParam !== "") {
     // Server mode only allows remote base configs; local paths are ignored.
     if (/^https?:\/\//i.test(baseParam.trim())) {
@@ -856,7 +848,7 @@ export async function convertSubRequest(
     }
   }
 
-  const generatedBody = generate(nodes, {
+  const converted = convertNodes(nodes, {
     baseConf,
     groups: resolvedGroups,
     includeRules,
@@ -865,14 +857,14 @@ export async function convertSubRequest(
     surgeVersion,
     target: target as TargetFormat,
   });
-  let finalBody = generatedBody;
+  let finalBody = converted.output;
   if ((target === "surge" || target === "surfboard") && options.managedPrefix) {
     const interval = request.interval > 0 ? request.interval : 86400;
     finalBody =
       `#!MANAGED-CONFIG ${options.managedPrefix}sub?target=${target}&url=${urls.join("|")}` +
-      ` interval=${String(interval)} strict=${request.strict ? "true" : "false"}\n\n${generatedBody}`;
+      ` interval=${String(interval)} strict=${request.strict ? "true" : "false"}\n\n${converted.output}`;
   }
-  if (nodes.length === 0) {
+  if (converted.nodes.length === 0) {
     throw Object.assign(new Error("No proxy nodes left after include/exclude filtering."), {
       statusCode: 400,
     });
@@ -998,6 +990,5 @@ export async function startServer(options: ServeOptions = {}): Promise<Server> {
       resolve();
     });
   });
-  process.stdout.write(`subconverter-ts listening on http://${host}:${port}/sub\n`);
   return server;
 }

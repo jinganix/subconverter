@@ -4,7 +4,7 @@ import { parseClashFlavor } from "../types/settings";
 import { TargetFormat } from "../types/settings";
 import { parseTriBool, type TriBool } from "../types/tribool";
 import { toInt } from "../utils/string";
-import { getAllUrlArgs, getUrlArg } from "../utils/url";
+import { getAllUrlArgs, getFirstUrlArg, getUrlArg } from "../utils/url";
 
 const TARGETS = new Set<string>(Object.values(TargetFormat));
 
@@ -75,17 +75,6 @@ export function resolveNewFieldName(query: string): boolean {
     );
   }
   return true;
-}
-
-/** Read the first non-empty value across underscore/hyphen aliases. */
-function firstArg(query: string, ...keys: string[]): string {
-  for (const key of keys) {
-    const value = getUrlArg(query, key);
-    if (value !== "") {
-      return value;
-    }
-  }
-  return "";
 }
 
 /**
@@ -180,11 +169,11 @@ export function parseRequestSettings(query: string): RequestSettings {
   settings.filterDeprecated = boolArg(query, "filter_deprecated");
   settings.newFieldName = resolveNewFieldName(query);
   settings.classicalRuleset = boolArg(query, "classical");
-  settings.clashFlavor = parseClashFlavor(firstArg(query, "flavor"));
+  settings.clashFlavor = parseClashFlavor(getFirstUrlArg(query, "flavor"));
   settings.expand = queryBoolFlag(query, "expand") ?? true;
   settings.strict = boolArg(query, "strict");
-  settings.filename = firstArg(query, "filename");
-  settings.devId = firstArg(query, "dev_id", "dev-id", "device_id", "device-id");
+  settings.filename = getFirstUrlArg(query, "filename");
+  settings.devId = getFirstUrlArg(query, "dev_id", "dev-id", "device_id", "device-id");
   settings.insert = getUrlArg(query, "insert") !== "";
   settings.clashScript = boolArg(query, "clash_script");
   settings.autoExtract = boolArg(query, "auto_extract");
@@ -202,8 +191,8 @@ export function parseRequestSettings(query: string): RequestSettings {
   settings.excludeRemarks = listArg(query, "exclude");
   settings.includeCountries = countryListArg(query, "include_country");
   settings.excludeCountries = countryListArg(query, "exclude_country");
-  settings.userinfoUrl = firstArg(query, "userinfo_url", "userinfo-url", "userinfo");
-  settings.userinfoProvider = firstArg(
+  settings.userinfoUrl = getFirstUrlArg(query, "userinfo_url", "userinfo-url", "userinfo");
+  settings.userinfoProvider = getFirstUrlArg(
     query,
     "userinfo_provider",
     "userinfo-provider",

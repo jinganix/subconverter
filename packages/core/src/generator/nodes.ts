@@ -32,7 +32,13 @@ function regMatch(value: string, pattern: string): boolean {
 }
 
 function regReplace(value: string, pattern: string, replacement: string): string {
-  return value.replace(new RegExp(pattern, "g"), replacement);
+  try {
+    return value.replace(new RegExp(pattern, "g"), replacement);
+  } catch {
+    // Malformed user-supplied pattern: skip it instead of failing the whole
+    // conversion (rename/emoji rules come from configs and query params).
+    return value;
+  }
 }
 
 const TYPE_MATCH_NAMES: Partial<Record<ProxyType, string>> = {
@@ -200,9 +206,13 @@ export function filterNodes(
 
 /** Normalize a remark for output: `=`→`-`, optional CSV quoting, de-duplication. */
 export function processRemark(remark: string, remarksList: string[], procComma = true): string {
-  let result = remark.replace(/=/g, "-");
+  // `=` breaks the `name = value` split of every Surge-family format, and a
+  // line break would end the line early (injecting config lines).
+  let result = remark.replace(/=/g, "-").replace(/[\r\n]+/g, " ");
   if (procComma && result.includes(",")) {
-    result = `"${result}"`;
+    // These formats have no escape for quotes, so an inner quote would end
+    // the name early and swallow the value.
+    result = `"${result.replace(/"/g, "'")}"`;
   }
   let tempRemark = result;
   let count = 2;
@@ -272,11 +282,7 @@ export function nodeNameRegex(node: Proxy, rules: RegexMatchConfig[]): void {
     if (rule.script !== "" || rule.match === "") {
       continue;
     }
-    try {
-      node.remark = node.remark.replace(new RegExp(rule.match, "g"), rule.replace);
-    } catch {
-      // Ignore malformed patterns instead of failing the whole conversion.
-    }
+    node.remark = regReplace(node.remark, rule.match, rule.replace);
   }
   if (node.remark === "") {
     node.remark = original;

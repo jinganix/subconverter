@@ -130,4 +130,11 @@ describe("resolveNodeCountries", () => {
     expect(resolve(nodes[0] as never)).toBe("US");
     expect(resolve(nodes[1] as never)).toBeUndefined();
   });
+
+  it("resolves copies of the same host (the engine clones nodes)", () => {
+    const original = node("1.2.3.4");
+    const resolve = countryResolverFrom(new Map([[original, "US"]]));
+    expect(resolve({ ...original })).toBe("US");
+    expect(resolve(node("9.9.9.9"))).toBeUndefined();
+  });
 });

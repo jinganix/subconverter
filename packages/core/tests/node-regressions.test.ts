@@ -4,13 +4,16 @@ import {
   ProxyType,
   base64Encode,
   createExtraSettings,
+  convertNodes,
   createProxy,
   dedupeNodes,
   generate,
   generatePeer,
   hysteria2Construct,
+  parseIni,
   parseLink,
   parseSubscription,
+  type Proxy,
   ssConstruct,
   toSurge,
   wireGuardConstruct,
@@ -196,5 +199,139 @@ describe("node de-duplication", () => {
     });
     const clash = generate([a, b], { settings, target: TargetFormat.Clash });
     expect(clash.match(/name: dup/g)).toHaveLength(1);
+  });
+});
+
+describe("regression: generation must not mutate input nodes", () => {
+  function twoNodes(): Proxy[] {
+    return parseSubscription(
+      "ss://YWVzLTI1Ni1nY206cGFzcw==@1.2.3.4:8388#nm\n" +
+        "ss://YWVzLTI1Ni1nY206cGFzcw==@5.6.7.8:8388#other",
+    );
+  }
+
+  it("keeps remarks intact across repeated generate calls", () => {
+    const nodes = twoNodes();
+    const options = {
+      includeRules: false,
+      settings: { appendProxyType: true },
+      target: TargetFormat.Surge,
+    };
+    const first = generate(nodes, options);
+    const second = generate(nodes, options);
+    expect(second).toBe(first);
+    expect(nodes.map((node) => node.remark)).toEqual(["nm", "other"]);
+  });
+
+  it("report the nodes that survived filtering without touching the input", () => {
+    const nodes = twoNodes();
+    const { nodes: effective, output } = convertNodes(nodes, {
+      includeRules: false,
+      settings: { includeRemarks: ["nm"] },
+      target: TargetFormat.Surge,
+    });
+    expect(effective.map((node) => node.remark)).toEqual(["nm"]);
+    expect(nodes).toHaveLength(2);
+    expect(output).not.toContain("other");
+  });
+});
+
+describe("regression: malformed user regex is skipped", () => {
+  it("does not fail the conversion on an invalid rename pattern", () => {
+    const nodes = parseSubscription("ss://YWVzLTI1Ni1nY206cGFzcw==@1.2.3.4:8388#nm");
+    for (const pattern of ["*", "(", "[", "a{2,1}"]) {
+      expect(() =>
+        generate(nodes, {
+          includeRules: false,
+          settings: { renameArray: [{ match: pattern, replace: "x", script: "" }] },
+          target: TargetFormat.Clash,
+        }),
+      ).not.toThrow();
+    }
+  });
+});
+
+describe("regression: remarks cannot break line-based output", () => {
+  function node(remark: string): Proxy {
+    const created = createProxy();
+    ssConstruct(created, {
+      group: "G",
+      method: "aes-256-gcm",
+      password: "pw",
+      port: 8388,
+      remark,
+      server: "1.2.3.4",
+    });
+    return created;
+  }
+
+  it("collapses line breaks", () => {
+    const surge = generate([node("a\nb")], { includeRules: false, target: TargetFormat.Surge });
+    expect(surge).toContain("a b = ss, 1.2.3.4");
+    expect(surge.trimEnd().split("\n")).toHaveLength(3);
+  });
+
+  it("escapes inner quotes when the remark is quoted for a comma", () => {
+    const surge = generate([node('a"b,c')], {
+      includeRules: false,
+      target: TargetFormat.Surge,
+    });
+    expect(surge).toContain('"a\'b,c" = ss, 1.2.3.4');
+  });
+});
+
+describe("regression: UTF-8 BOM does not hide the first entry", () => {
+  it("keeps the first node of a BOM-prefixed subscription", () => {
+    const link = "ss://YWVzLTI1Ni1nY206cGFzcw==@1.2.3.4:8388#nm";
+    expect(parseSubscription(`\uFEFF${link}`)).toHaveLength(1);
+    expect(parseSubscription(`\uFEFF${link}\n${link}`)).toHaveLength(2);
+  });
+
+  it("keeps the first item of a BOM-prefixed ini file", () => {
+    const doc = parseIni("\uFEFF[custom]\nruleset=g,https://x/y\n", { keepEmptyValues: true });
+    expect(doc.sections[0]?.name).toBe("custom");
+  });
+
+  it("skips comment lines", () => {
+    const doc = parseIni("[custom]\n;ruleset=g,https://x/y\nruleset=h,https://x/z\n");
+    expect(doc.sections[0]?.items).toEqual([["ruleset", "h,https://x/z"]]);
+  });
+});
+
+describe("regression: a Clash base config is merged like upstream", () => {
+  const node = (): Proxy => parseSubscription("trojan://pw@1.2.3.4:443#A")[0] as Proxy;
+
+  it("keeps base keys and replaces the generated sections", () => {
+    const base = [
+      "port: 7890",
+      "mode: global",
+      "proxies:",
+      "  - name: Stale",
+      "    type: ss",
+      "rules:",
+      "  - MATCH,Stale",
+      "",
+    ].join("\n");
+    const out = generate([node()], {
+      baseConf: base,
+      groups: [],
+      includeRules: false,
+      target: TargetFormat.Clash,
+    });
+    expect(out).toContain("port: 7890");
+    expect(out).toContain("mode: global");
+    expect(out).toContain("name: A");
+    expect(out).not.toContain("Stale");
+    expect(out).not.toContain("rules:");
+  });
+
+  it("ignores a malformed base instead of failing", () => {
+    const out = generate([node()], {
+      baseConf: "not: [valid",
+      groups: [],
+      includeRules: false,
+      target: TargetFormat.Clash,
+    });
+    expect(out).toContain("name: A");
   });
 });

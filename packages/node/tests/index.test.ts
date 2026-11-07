@@ -7,11 +7,14 @@ import { runPreprocess } from "@subconverter/core";
 
 import {
   collectNodes,
+  fetchSubscription,
   loadNodes,
   prepareConversion,
+  readCappedText,
   readSubscriptionFile,
   resolveSubscription,
   writeOutputFile,
+  type SubscriptionSource,
 } from "../src/index";
 
 let dir = "";
@@ -231,5 +234,65 @@ describe("auto country", () => {
     });
     expect(input.nodes[0]?.remark).toBe("server1");
     expect(input.settings.countryResolver).toBeUndefined();
+  });
+});
+
+describe("fetch guards", () => {
+  it("caps a response with no readable body stream", async () => {
+    const big = new Response(null, { headers: {} });
+    Object.defineProperty(big, "body", { value: null });
+    Object.defineProperty(big, "text", {
+      value: async () => "x".repeat(6 * 1024 * 1024),
+    });
+    await expect(readCappedText(big, 1024)).rejects.toThrow(/exceeds size limit/);
+    const small = new Response(null);
+    Object.defineProperty(small, "body", { value: null });
+    Object.defineProperty(small, "text", { value: async () => "ok" });
+    await expect(readCappedText(small, 1024)).resolves.toBe("ok");
+  });
+
+  it("caps a streamed body as it arrives", async () => {
+    const chunk = new Uint8Array(2048);
+    let reads = 0;
+    const body = new ReadableStream({
+      pull(controller) {
+        reads += 1;
+        controller.enqueue(chunk);
+        if (reads > 100) {
+          controller.close();
+        }
+      },
+    });
+    const response = new Response(body);
+    await expect(readCappedText(response, 4096)).rejects.toThrow(/exceeds size limit/);
+  });
+
+  it("times out a slow fetch and reports HTTP failures", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url: string, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => {
+              reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+            });
+          }),
+      ),
+    );
+    await expect(fetchSubscription("https://example.com/sub", { timeoutMs: 10 })).rejects.toThrow(
+      /aborted/i,
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("nope", { status: 500, statusText: "Internal Server Error" })),
+    );
+    await expect(fetchSubscription("https://example.com/sub")).rejects.toThrow(/500/);
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects unknown subscription sources", async () => {
+    await expect(
+      resolveSubscription({ kind: "bogus" } as unknown as SubscriptionSource),
+    ).rejects.toThrow(/Unknown subscription source/);
   });
 });

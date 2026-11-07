@@ -67,6 +67,20 @@ export function getUrlArg(query: string, key: string): string {
   return values.length > 0 ? (values[values.length - 1] as string).trim() : "";
 }
 
+/**
+ * Read the first non-empty value across `_`/`-` alias keys, mirroring
+ * `firstArg` in the original C++ (`first_value(query, {keys})`).
+ */
+export function getFirstUrlArg(query: string, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = getUrlArg(query, key);
+    if (value !== "") {
+      return value;
+    }
+  }
+  return "";
+}
+
 /** Split a URL into its scheme/authority-specific parts without a URL parser. */
 export function splitUrl(raw: string): { base: string; query: string } {
   const hashIndex = raw.indexOf("#");

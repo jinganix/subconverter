@@ -1,3 +1,5 @@
+import { stripBom } from "./string";
+
 export interface IniSection {
   name: string;
   items: Array<[string, string]>;
@@ -23,6 +25,7 @@ export interface ParseIniOptions {
  * on: case-preserving keys, duplicate sections, and isolated leading items.
  */
 export function parseIni(content: string, options: ParseIniOptions = {}): IniDocument {
+  const text = stripBom(content);
   const isolatedSection = options.isolatedSection ?? "";
   const keepEmptyValues = options.keepEmptyValues ?? false;
   const doTrim = options.trim ?? true;
@@ -31,13 +34,14 @@ export function parseIni(content: string, options: ParseIniOptions = {}): IniDoc
   const isolated: Array<[string, string]> = [];
   let current: IniSection | undefined;
 
-  const lines = content.split(/\r?\n/);
+  const lines = text.split(/\r?\n/);
   for (const rawLine of lines) {
     let line = rawLine;
     if (doTrim) {
       line = line.trim();
     }
-    if (line === "") {
+    // Comments (`;`, `#`, `//`) are ignored, mirroring upstream `ini_reader`.
+    if (line === "" || line.startsWith(";") || line.startsWith("#") || line.startsWith("//")) {
       continue;
     }
     if (line.startsWith("[") && line.endsWith("]")) {
@@ -94,9 +98,10 @@ export interface RawIniSection {
 
 /** Split text into ordered raw sections, preserving line content. */
 export function parseRawIni(content: string): RawIniSection[] {
+  const text = stripBom(content);
   const sections: RawIniSection[] = [];
   let current: RawIniSection | undefined;
-  for (const rawLine of content.split(/\r?\n/)) {
+  for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.replace(/\s+$/, "");
     const header = /^\[(.*)\]$/.exec(line.trim());
     if (header) {

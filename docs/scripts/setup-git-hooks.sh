@@ -22,6 +22,6 @@ fi
 
 git config core.hooksPath .githooks
 echo "Git hooks enabled: core.hooksPath=.githooks"
-echo "  pre-commit:  block direct commits to master + docs/scripts/check.sh (typecheck + lint + test)"
+echo "  pre-commit:  block direct commits to main/master + docs/scripts/check.sh (the full gate)"
 echo "  commit-msg:  docs/scripts/validate-commit-msg.sh"
-echo "  pre-push:    block direct push to master + docs/scripts/check.sh"
+echo "  pre-push:    block direct pushes to main/master + docs/scripts/check.sh"

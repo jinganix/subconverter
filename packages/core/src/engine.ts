@@ -1,4 +1,4 @@
-import { buildClash, stringifyClash } from "./generator/clash";
+import { buildClash, mergeClashBase, stringifyClash } from "./generator/clash";
 import { getDefaultProxyGroups, getDefaultRulesets } from "./generator/default-profile";
 import { proxyToSingle, proxyToSsd, proxyToSsSub } from "./generator/links";
 import { toLoon } from "./generator/loon";
@@ -62,13 +62,36 @@ export function runPreprocess(nodes: Proxy[], settings: ExtraSettings): void {
   }
 }
 
+/** A generated config plus the nodes that went into it. */
+export interface ConvertedNodes {
+  /** Nodes after preprocessing (rename, filters, dedupe, sort); a copy. */
+  nodes: Proxy[];
+  /** Generated configuration text. */
+  output: string;
+}
+
 /**
  * Convert nodes into the requested output format.
  *
  * This is the isomorphic generation entry point used by the CLI, the Node
- * adapter, and the browser build.
+ * adapter, and the browser build. The input array is never modified; use
+ * {@link convertNodes} when you also need the preprocessed nodes.
  */
 export function generate(nodes: Proxy[], options: GenerateOptions): string {
+  return convertNodes(nodes, options).output;
+}
+
+/**
+ * Like {@link generate}, but also returns the nodes that survived preprocessing
+ * (`rename`/`include`/`exclude`/country filters). Nodes are copied, so the
+ * caller's array keeps its original remarks and ids.
+ */
+export function convertNodes(inputNodes: Proxy[], options: GenerateOptions): ConvertedNodes {
+  const nodes = inputNodes.map((node) => ({ ...node }));
+  return { nodes, output: generateInPlace(nodes, options) };
+}
+
+function generateInPlace(nodes: Proxy[], options: GenerateOptions): string {
   const settings: ExtraSettings = { ...createExtraSettings(), ...options.settings };
   runPreprocess(nodes, settings);
   const groups = resolveGroups(options);
@@ -80,7 +103,7 @@ export function generate(nodes: Proxy[], options: GenerateOptions): string {
     case TargetFormat.ClashR: {
       const { doc } = buildClash(nodes, groups, settings, options.target === TargetFormat.ClashR);
       attachClashRules(doc, settings, rulesets);
-      return stringifyClash(doc);
+      return stringifyClash(mergeClashBase(baseConf, doc));
     }
     case TargetFormat.Surge: {
       const surgeVersion = options.surgeVersion ?? 5;

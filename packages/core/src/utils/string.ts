@@ -1,3 +1,8 @@
+/** Strip a leading UTF-8 BOM (some providers serve one). */
+export function stripBom(input: string): string {
+  return input.startsWith("\uFEFF") ? input.slice(1) : input;
+}
+
 /** Trim ASCII whitespace from both ends. */
 export function trim(input: string): string {
   return input.replace(/^\s+|\s+$/g, "");

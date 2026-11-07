@@ -22,8 +22,9 @@
 - `expand=false` keeps remote rulesets as `RULE-SET,url,group` refs for
   Surge/Surfboard (Clash always expands); `classical` passes Clash `payload:`
   lists through verbatim
-- Entry points: `parseSubscription()` → `Proxy[]`, `generate(nodes, { target })` → `string`,
-  `TargetFormat` enum for the output target
+- Entry points: `parseSubscription()` → `Proxy[]`, `generate(nodes, { target })` → `string`
+  (never mutates the input nodes), `convertNodes(nodes, opts)` → `{ nodes, output }` when the
+  preprocessed/filtered node list is also needed, `TargetFormat` enum for the output target
 - Targets: `clash`, `clashr`, `surge`, `surfboard`, `quanx`, `quan`, `loon`, `mellow`,
   `singbox`, `v2ray`, `trojan`, `ss`, `ssr`, `sssub`, `ssd`, `mixed`, `nodelist`, `auto`
   (parsing only). Each target drops unsupported node types silently
@@ -53,7 +54,8 @@
 - `packages/core/src/parser/`: link and config parsers (`subscription.ts` auto-detects input)
 - `packages/core/src/generator/`: one module per output target (`clash.ts`, `surge.ts`,
   `singbox.ts`, `loon.ts`, `quanx.ts`, ...), plus `nodes.ts` for rename/emoji/country handling
-- `packages/core/src/engine.ts`: `generate()`, the isomorphic generation entry point
+- `packages/core/src/engine.ts`: `generate()` / `convertNodes()`, the isomorphic generation
+  entry points
 - `packages/core/src/types/`: `Proxy`, `TargetFormat`, `ExtraSettings`, proxy groups, rulesets
 - `packages/core/src/settings/`: external INI parsing and `/sub` query-string parsing
 - `packages/node/src/index.ts`: fetch/fs loading, conversion pipeline, GeoIP resolver
@@ -70,7 +72,7 @@ npm run build          # tsup bundles for every package
 npm run typecheck      # tsc per package
 npm run lint           # eslint, zero warnings
 npm test               # vitest
-npm run check          # typecheck + lint + test + docs freshness
+npm run check          # typecheck + lint + format + test + docs freshness + knip
 npm run docs:api       # regenerate docs/API.md from the barrels
 npm run docs:check     # docs/API.md + README enum coverage drift guard
 ```

@@ -21,7 +21,7 @@ import {
 import type { Proxy } from "../types/proxy";
 import { ProxyType, createProxy } from "../types/proxy";
 import { urlSafeBase64Decode } from "../utils/base64";
-import { countOccurrences, startsWith } from "../utils/string";
+import { countOccurrences, startsWith, stripBom } from "../utils/string";
 
 /** Parse a single proxy link into `node`. */
 export function explode(link: string, node: Proxy): void {
@@ -134,9 +134,10 @@ function splitLinks(body: string, nodes: Proxy[]): void {
 /** Parse a config blob (Clash/SS/SSR/V2Ray/SSTap/Netch) or a subscription. */
 export function parseSubscription(content: string): Proxy[] {
   const nodes: Proxy[] = [];
-  if (parseConfContent(content, nodes)) {
+  const text = stripBom(content);
+  if (parseConfContent(text, nodes)) {
     return nodes;
   }
-  explodeSub(content, nodes);
+  explodeSub(text, nodes);
   return nodes;
 }
