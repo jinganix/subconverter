@@ -244,8 +244,10 @@ export function proxyToSsd(nodes: Proxy[], group: string, userinfo: string): str
     doc.traffic_used = (upload + download) / gb;
     doc.traffic_total = total / gb;
     if (expiry !== "") {
+      // UTC getters: the same input must render identically regardless of
+      // the server's local timezone.
       const date = new Date(toInt(expiry) * 1000);
-      doc.expiry = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+      doc.expiry = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")} ${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`;
     }
   }
   const servers: unknown[] = [];

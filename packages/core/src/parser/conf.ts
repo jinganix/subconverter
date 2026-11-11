@@ -39,7 +39,10 @@ function asBool(value: unknown): boolean {
   if (typeof value === "boolean") {
     return value;
   }
-  return asString(value).toLowerCase() === "true";
+  // Accept the same affirmative literals as the query/CLI boolean parsers
+  // (`1`/`yes`/`on`); YAML 1.1 configs spell booleans that way.
+  const normalized = asString(value).trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on";
 }
 
 function asTri(value: unknown): TriBool {
@@ -1125,7 +1128,9 @@ function parseQuanxStyle(
   const lastColon = first.lastIndexOf(":");
   const server = trim(first.slice(0, lastColon));
   const port = trim(first.slice(lastColon + 1));
-  if (port === "0") {
+  // Reject non-numeric ports too: without a colon `port` is the whole
+  // host string and `toInt` would silently coerce it to port 0.
+  if (!/^\d+$/.test(port) || port === "0") {
     return false;
   }
   let method = "";

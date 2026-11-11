@@ -740,7 +740,8 @@ function regMatch(input: string, pattern: string): boolean;
 #### `regReplace` (function)
 
 > Replace every regex match, mirroring subconverter's `regReplace`.
-> An empty `replacement` removes the matches.
+> An empty `replacement` removes the matches. Invalid patterns leave the
+> input untouched instead of throwing (rules come from configs and URLs).
 
 ```ts
 function regReplace(input: string, pattern: string, replacement = ""): string;
@@ -1720,7 +1721,7 @@ function stringifyClash(doc: Record<string, unknown>): string;
 
 #### `toClash` (function)
 
-> Convert nodes into a Clash YAML configuration string.
+> Convert nodes into a Clash YAML configuration string (the input array is left untouched).
 
 ```ts
 function toClash(
@@ -2008,7 +2009,7 @@ Source: [`./src/generator/loon.ts`](../packages/core/src/generator/loon.ts)
 
 #### `toLoon` (function)
 
-> Convert nodes into a Loon configuration string.
+> Convert nodes into a Loon configuration string (the input array is left untouched).
 
 ```ts
 function toLoon(
@@ -2037,7 +2038,7 @@ Source: [`./src/generator/mellow.ts`](../packages/core/src/generator/mellow.ts)
 
 #### `toMellow` (function)
 
-> Convert nodes into a Mellow (`mellow.conf`) configuration string.
+> Convert nodes into a Mellow (`mellow.conf`) configuration string (the input is left untouched).
 
 ```ts
 function toMellow(
@@ -2075,7 +2076,7 @@ function formatSingBoxInterval(interval: number): string;
 
 #### `toSingBox` (function)
 
-> Convert nodes into a sing-box configuration JSON string.
+> Convert nodes into a sing-box configuration JSON string (the input array is left untouched).
 
 ```ts
 function toSingBox(
@@ -2105,7 +2106,7 @@ Source: [`./src/generator/quan.ts`](../packages/core/src/generator/quan.ts)
 
 #### `toQuan` (function)
 
-> Convert nodes into a Quantumult configuration string.
+> Convert nodes into a Quantumult configuration string (the input array is left untouched).
 
 ```ts
 function toQuan(
@@ -2134,7 +2135,7 @@ Source: [`./src/generator/quanx.ts`](../packages/core/src/generator/quanx.ts)
 
 #### `toQuanX` (function)
 
-> Convert nodes into a Quantumult X configuration string.
+> Convert nodes into a Quantumult X configuration string (the input array is left untouched).
 
 ```ts
 function toQuanX(
@@ -2171,7 +2172,7 @@ function generatePeer(node: Proxy, clientIdAsReserved = false): string;
 
 #### `toSurge` (function)
 
-> Convert nodes into a Surge configuration string.
+> Convert nodes into a Surge configuration string (the input array is left untouched).
 
 ```ts
 function toSurge(
@@ -2353,7 +2354,7 @@ function checkIgnore(node: Proxy, excludeRemarks: string[], includeRemarks: stri
 
 #### `dedupeNodes` (function)
 
-> Remove nodes that share a type, server, port, and remark. Returns the count removed.
+> Remove duplicate nodes. Returns the count removed.
 
 ```ts
 function dedupeNodes(nodes: Proxy[]): number;

@@ -16,7 +16,7 @@ import {
 } from "./construct";
 import type { Proxy } from "../types/proxy";
 import { DEFAULT_GROUPS, createProxy } from "../types/proxy";
-import type { TriBool } from "../types/tribool";
+import { parseTriBool } from "../types/tribool";
 import { urlSafeBase64Decode } from "../utils/base64";
 import { split, toInt, trim } from "../utils/string";
 import { getUrlArg, urlDecode } from "../utils/url";
@@ -46,7 +46,13 @@ export function explodeVmess(vmess: string, node: Proxy): void {
     return;
   }
 
-  const decoded = urlSafeBase64Decode(vmess.replace(/(vmess|vmess1):\/\//, ""));
+  // A trailing `#remark` is not base64 input: strip it before decoding or
+  // its characters corrupt the payload (same as `explodeHttpSub`).
+  const hashPos = vmess.indexOf("#");
+  const fragment = hashPos === -1 ? "" : urlDecode(vmess.slice(hashPos + 1));
+  const bare = hashPos === -1 ? vmess : vmess.slice(0, hashPos);
+
+  const decoded = urlSafeBase64Decode(bare.replace(/(vmess|vmess1):\/\//, ""));
   if (/.*?\s=\s.*/.test(decoded)) {
     explodeQuan(decoded, node);
     return;
@@ -67,7 +73,9 @@ export function explodeVmess(vmess: string, node: Proxy): void {
   if (data["v"] !== undefined) {
     version = String(data["v"]);
   }
-  const ps = String(data["ps"] ?? "");
+  // A `#fragment` remark wins when the payload has no `ps` (it was never
+  // part of the JSON, so it cannot corrupt the decode above).
+  const ps = String(data["ps"] ?? fragment);
   let add = String(data["add"] ?? "");
   const port = String(data["port"] ?? "");
   if (port === "0" || port === "") {
@@ -129,7 +137,7 @@ export function explodeStdVmess(vmess: string, node: Proxy): void {
     body = body.slice(0, hashPos);
   }
   const matcher =
-    /^([a-z]+)(?:\+([a-z]+))?:([\da-f]{4}(?:[\da-f]{4}-){4}[\da-f]{12})-(\d+)@(.+):(\d+)(?:\/?\?(.*))?$/;
+    /^([a-z]+)(?:\+([a-z]+))?:([\da-fA-F]{4}(?:[\da-fA-F]{4}-){4}[\da-fA-F]{12})-(\d+)@(.+):(\d+)(?:\/?\?(.*))?$/;
   const match = matcher.exec(body);
   if (!match) {
     return;
@@ -595,18 +603,16 @@ export function explodeSocks(link: string, node: Proxy): void {
       body = body.slice(0, hashPos);
     }
     body = urlSafeBase64Decode(body.slice(8));
-    if (body.includes("@")) {
-      const userinfo = split(body, "@");
-      if (userinfo.length < 2) {
-        return;
-      }
-      body = userinfo[1] as string;
-      const creds = split(userinfo[0] as string, ":");
+    const at = body.lastIndexOf("@");
+    if (at !== -1) {
+      // Split on the last `@`: passwords may legally contain `@`.
+      const creds = split(body.slice(0, at), ":");
       if (creds.length < 2) {
         return;
       }
       username = creds[0] as string;
-      password = creds[1] as string;
+      password = creds.slice(1).join(":");
+      body = body.slice(at + 1);
     }
     const args = split(body, ":");
     if (args.length < 2) {
@@ -669,6 +675,13 @@ export function explodeHttpSub(link: string, node: Proxy): void {
   let remarks = "";
   let group = "";
   const tls = body.includes("https://");
+  // Strip the fragment before base64-decoding: its characters are valid
+  // base64 input and would otherwise decode into trailing garbage.
+  const hashPos = body.indexOf("#");
+  if (hashPos !== -1) {
+    remarks = urlDecode(body.slice(hashPos + 1));
+    body = body.slice(0, hashPos);
+  }
   const qpos = body.indexOf("?");
   if (qpos !== -1) {
     const addition = body.slice(qpos + 1);
@@ -683,15 +696,22 @@ export function explodeHttpSub(link: string, node: Proxy): void {
   let port = "";
   let username = "";
   let password = "";
-  if (body.includes("@")) {
-    const match = firstMatch(body, "(.*?):(.*?)@(.*):(.*)");
+  const at = body.lastIndexOf("@");
+  if (at !== -1) {
+    // Split on the last `@`: passwords may legally contain `@` (and `:`).
+    const creds = body.slice(0, at);
+    const colon = creds.indexOf(":");
+    if (colon === -1) {
+      return;
+    }
+    username = creds.slice(0, colon);
+    password = creds.slice(colon + 1);
+    const match = firstMatch(body.slice(at + 1), "(.*):(.*)");
     if (!match) {
       return;
     }
-    username = match[1] as string;
-    password = match[2] as string;
-    server = match[3] as string;
-    port = match[4] as string;
+    server = match[1] as string;
+    port = match[2] as string;
   } else {
     const match = firstMatch(body, "(.*):(.*)");
     if (!match) {
@@ -769,7 +789,6 @@ export function explodeTrojan(trojan: string, node: Proxy): void {
     network = "ws";
   }
 
-  const type = getUrlArg(addition, "type");
   const sni = getUrlArg(addition, "sni");
   const insecure = getUrlArg(addition, "allowInsecure");
 
@@ -784,23 +803,12 @@ export function explodeTrojan(trojan: string, node: Proxy): void {
     path,
     port,
     remark,
-    scv: insecure === "" ? undefined : parseTri(insecure),
+    scv: insecure === "" ? undefined : parseTriBool(insecure),
     server,
     sni,
-    tfo: tfo === "" ? undefined : parseTri(tfo),
-    tlsSecure: type !== "" || true,
+    tfo: tfo === "" ? undefined : parseTriBool(tfo),
+    tlsSecure: true,
   });
-}
-
-function parseTri(value: string): TriBool {
-  const normalized = value.trim().toLowerCase();
-  if (["1", "true", "yes", "on"].includes(normalized)) {
-    return true;
-  }
-  if (["0", "false", "no", "off"].includes(normalized)) {
-    return false;
-  }
-  return undefined;
 }
 
 /** Parse a `hysteria2://` / `hy2://` link. */
@@ -820,7 +828,7 @@ function explodeStdHysteria2(link: string, node: Proxy): void {
     remark = urlDecode(body.slice(hashPos + 1));
     body = body.slice(0, hashPos);
   }
-  const qpos = body.lastIndexOf("?");
+  const qpos = body.indexOf("?");
   if (qpos !== -1) {
     addition = body.slice(qpos + 1);
     body = body.slice(0, qpos);
@@ -878,7 +886,7 @@ function explodeStdHysteria2(link: string, node: Proxy): void {
     port,
     ports,
     remark,
-    scv: scv === "" ? undefined : parseTri(scv),
+    scv: scv === "" ? undefined : parseTriBool(scv),
     server: add,
     sni,
     up,
@@ -895,7 +903,7 @@ export function explodeAnyTls(link: string, node: Proxy): void {
     remark = urlDecode(body.slice(hashPos + 1));
     body = body.slice(0, hashPos);
   }
-  const qpos = body.lastIndexOf("?");
+  const qpos = body.indexOf("?");
   if (qpos !== -1) {
     addition = body.slice(qpos + 1);
     body = body.slice(0, qpos);
@@ -921,10 +929,10 @@ export function explodeAnyTls(link: string, node: Proxy): void {
     password,
     port,
     remark,
-    scv: scv === "" ? undefined : parseTri(scv),
+    scv: scv === "" ? undefined : parseTriBool(scv),
     server: add,
     sni,
-    udp: udp === "" ? undefined : parseTri(udp),
+    udp: udp === "" ? undefined : parseTriBool(udp),
   });
 }
 
@@ -938,7 +946,7 @@ export function explodeSnell(link: string, node: Proxy): void {
     remark = urlDecode(body.slice(hashPos + 1));
     body = body.slice(0, hashPos);
   }
-  const qpos = body.lastIndexOf("?");
+  const qpos = body.indexOf("?");
   if (qpos !== -1) {
     addition = body.slice(qpos + 1);
     body = body.slice(0, qpos);
@@ -969,10 +977,10 @@ export function explodeSnell(link: string, node: Proxy): void {
     password,
     port,
     remark,
-    scv: scv === "" ? undefined : parseTri(scv),
+    scv: scv === "" ? undefined : parseTriBool(scv),
     server,
-    tfo: tfo === "" ? undefined : parseTri(tfo),
-    udp: udp === "" ? undefined : parseTri(udp),
+    tfo: tfo === "" ? undefined : parseTriBool(tfo),
+    udp: udp === "" ? undefined : parseTriBool(udp),
     version: version === "" ? 1 : toInt(version),
   });
 }
@@ -987,7 +995,7 @@ export function explodeHysteria(link: string, node: Proxy): void {
     remark = urlDecode(body.slice(hashPos + 1));
     body = body.slice(0, hashPos);
   }
-  const qpos = body.lastIndexOf("?");
+  const qpos = body.indexOf("?");
   if (qpos !== -1) {
     addition = body.slice(qpos + 1);
     body = body.slice(0, qpos);
@@ -1023,7 +1031,7 @@ export function explodeHysteria(link: string, node: Proxy): void {
     port,
     protocol: protocol === "" ? "udp" : protocol,
     remark,
-    scv: insecure === "" ? undefined : parseTri(insecure),
+    scv: insecure === "" ? undefined : parseTriBool(insecure),
     server,
     sni: sni === "" ? server : sni,
     upSpeed,
@@ -1041,7 +1049,7 @@ export function explodeWireguard(link: string, node: Proxy): void {
     remark = urlDecode(body.slice(hashPos + 1));
     body = body.slice(0, hashPos);
   }
-  const qpos = body.lastIndexOf("?");
+  const qpos = body.indexOf("?");
   if (qpos !== -1) {
     addition = body.slice(qpos + 1);
     body = body.slice(0, qpos);
@@ -1139,7 +1147,7 @@ export function explodeVless(link: string, node: Proxy): void {
     scv:
       getUrlArg(addition, "allowInsecure") === ""
         ? undefined
-        : parseTri(getUrlArg(addition, "allowInsecure")),
+        : parseTriBool(getUrlArg(addition, "allowInsecure")),
     server,
     shortId,
     sni,
@@ -1191,7 +1199,7 @@ export function explodeTuic(link: string, node: Proxy): void {
     scv:
       getUrlArg(addition, "allow_insecure") === ""
         ? undefined
-        : parseTri(getUrlArg(addition, "allow_insecure")),
+        : parseTriBool(getUrlArg(addition, "allow_insecure")),
     server,
     sni,
     userId,

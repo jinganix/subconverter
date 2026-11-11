@@ -125,6 +125,15 @@ describe("clash parser extra branches", () => {
     );
     expect(nodes).toHaveLength(1);
   });
+
+  it("accepts yaml-1.1 boolean literals for clash flags", () => {
+    const nodes = parseSubscription(
+      "proxies:\n" +
+        "  - {name: a, type: ss, server: s, port: 1, cipher: aes-128-gcm, password: p, udp: yes}\n" +
+        "  - {name: b, type: ss, server: s, port: 1, cipher: aes-128-gcm, password: p, udp: no}",
+    );
+    expect(nodes.map((node) => node.udp)).toEqual([true, false]);
+  });
 });
 
 describe("generate clashr covers ssr param naming", () => {

@@ -118,7 +118,9 @@ function splitLinks(body: string, nodes: Proxy[]): void {
         : "\r"
       : "\n";
   for (const rawLink of normalized.split(delimiter)) {
-    const link = rawLink.replace(/\r/g, "");
+    // Providers and copy-pasted configs often indent lines; dispatch is
+    // prefix-based (`startsWith`), so untrimmed lines would silently drop.
+    const link = rawLink.replace(/\r/g, "").trim();
     if (link === "") {
       continue;
     }

@@ -111,6 +111,11 @@ describe("string utils", () => {
     expect(replaceAllDistinct("aaa", "", "b")).toBe("aaa");
   });
 
+  it("leaves invalid patterns untouched instead of throwing", () => {
+    expect(regReplace("a+b", "[", "-")).toBe("a+b");
+    expect(regMatch("hello", "[")).toBe(false);
+  });
+
   it("classifies ip literals", () => {
     expect(isIpv4("1.2.3.4")).toBe(true);
     expect(isIpv4("1.2.3")).toBe(false);

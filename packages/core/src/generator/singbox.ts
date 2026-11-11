@@ -321,7 +321,7 @@ export interface SingBoxOptions {
   overwriteOriginalRules?: boolean;
 }
 
-/** Convert nodes into a sing-box configuration JSON string. */
+/** Convert nodes into a sing-box configuration JSON string (the input array is left untouched). */
 export function toSingBox(
   nodes: Proxy[],
   extraProxyGroup: ProxyGroupConfig[],
@@ -351,7 +351,9 @@ export function toSingBox(
 
   const remarksList: string[] = [];
   const nodelist: Proxy[] = [];
-  for (const x of nodes) {
+  for (const src of nodes) {
+    // Work on a copy so the caller's nodes keep their remarks intact.
+    const x = { ...src };
     if (settings.appendProxyType) {
       x.remark = `[${proxyTypeName(x.type)}] ${x.remark}`;
     }

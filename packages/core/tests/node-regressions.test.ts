@@ -15,6 +15,7 @@ import {
   parseSubscription,
   type Proxy,
   ssConstruct,
+  toClash,
   toSurge,
   wireGuardConstruct,
   TargetFormat,
@@ -200,6 +201,22 @@ describe("node de-duplication", () => {
     const clash = generate([a, b], { settings, target: TargetFormat.Clash });
     expect(clash.match(/name: dup/g)).toHaveLength(1);
   });
+
+  it("keeps vmess nodes that differ only by user id", () => {
+    const a = createProxy();
+    a.hostname = "1.2.3.4";
+    a.port = 443;
+    a.remark = "dup";
+    a.type = ProxyType.VMess;
+    a.userId = "11111111-1111-1111-1111-111111111111";
+    const b = createProxy();
+    b.hostname = "1.2.3.4";
+    b.port = 443;
+    b.remark = "dup";
+    b.type = ProxyType.VMess;
+    b.userId = "22222222-2222-2222-2222-222222222222";
+    expect(dedupeNodes([a, b])).toBe(0);
+  });
 });
 
 describe("regression: generation must not mutate input nodes", () => {
@@ -233,6 +250,18 @@ describe("regression: generation must not mutate input nodes", () => {
     expect(effective.map((node) => node.remark)).toEqual(["nm"]);
     expect(nodes).toHaveLength(2);
     expect(output).not.toContain("other");
+  });
+
+  it("keeps remarks intact across direct generator calls", () => {
+    const nodes = twoNodes();
+    const settings = { ...createExtraSettings(), appendProxyType: true };
+    const clash = toClash(nodes, [], settings);
+    expect(clash).toContain("[SS] nm");
+    const surge = toSurge(nodes, [], settings, { baseConf: "", nodeList: false, version: 5 });
+    // No compounding (`[SS] [SS] nm`) and no leak between formats.
+    expect(surge).toContain("[SS] nm");
+    expect(surge).not.toContain("[SS] [SS]");
+    expect(nodes.map((node) => node.remark)).toEqual(["nm", "other"]);
   });
 });
 

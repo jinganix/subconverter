@@ -70,15 +70,24 @@ export function split(input: string, delimiter: string, removeEmpty = false): st
 
 /**
  * Replace every regex match, mirroring subconverter's `regReplace`.
- * An empty `replacement` removes the matches.
+ * An empty `replacement` removes the matches. Invalid patterns leave the
+ * input untouched instead of throwing (rules come from configs and URLs).
  */
 export function regReplace(input: string, pattern: string, replacement = ""): string {
-  return input.replace(new RegExp(pattern, "g"), replacement);
+  try {
+    return input.replace(new RegExp(pattern, "g"), replacement);
+  } catch {
+    return input;
+  }
 }
 
 /** `true` when `pattern` (a JS regex source) matches anywhere in `input`. */
 export function regMatch(input: string, pattern: string): boolean {
-  return new RegExp(pattern).test(input);
+  try {
+    return new RegExp(pattern).test(input);
+  } catch {
+    return false;
+  }
 }
 
 /**

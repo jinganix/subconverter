@@ -25,20 +25,22 @@ import { readFile } from "node:fs/promises";
 
 const TARGET_VALUES = new Set(Object.values(TargetFormat));
 
-/** Parse `--emoji match@replace` style rules. */
-function parseEmojiRules(values: string[]): ExtraSettings["emojiArray"] {
+/**
+ * Parse `--rename`/`--emoji`/`--name-regex match@replace` style rules.
+ *
+ * Emoji additionally accepts the upstream INI form `match,replace` (comma)
+ * when the value contains no `@`, so rules can be copied verbatim between
+ * the CLI, external INI configs, and `?emoji=` query params.
+ */
+function parseMatchReplaceRules(
+  values: string[],
+  commaFallback = false,
+): ExtraSettings["renameArray"] {
   return values.map((value) => {
-    const at = value.lastIndexOf("@");
-    if (at === -1) {
-      return { match: value, replace: "", script: "" };
+    let at = value.lastIndexOf("@");
+    if (at === -1 && commaFallback) {
+      at = value.lastIndexOf(",");
     }
-    return { match: value.slice(0, at), replace: value.slice(at + 1), script: "" };
-  });
-}
-
-function parseRenameRules(values: string[]): ExtraSettings["renameArray"] {
-  return values.map((value) => {
-    const at = value.lastIndexOf("@");
     if (at === -1) {
       return { match: value, replace: "", script: "" };
     }
@@ -90,6 +92,10 @@ function isBoolLiteral(value: string | undefined): boolean {
     normalized === "false" ||
     normalized === "1" ||
     normalized === "0" ||
+    normalized === "yes" ||
+    normalized === "no" ||
+    normalized === "on" ||
+    normalized === "off" ||
     normalized === ""
   );
 }
@@ -180,7 +186,13 @@ function flagBool(state: ArgState, name: string): boolean {
   return values.some((raw) => {
     const normalized = raw.trim().toLowerCase();
     // Mirror core `boolArg`: bare flags arrive as `"true"`, and `=1` counts.
-    return normalized === "true" || normalized === "1" || normalized === "";
+    return (
+      normalized === "true" ||
+      normalized === "1" ||
+      normalized === "yes" ||
+      normalized === "on" ||
+      normalized === ""
+    );
   });
 }
 
@@ -229,7 +241,7 @@ Convert options:
   -r, --rename <m@r>    Rename rule: match-regex@replacement
       --name-regex <m@r>    Regex replace applied to names before rename rules (repeatable; $1 backrefs)
       --name-remove <list>  Comma-separated literal fragments removed from names (repeatable)
-  -e, --emoji <m@r>     Emoji rule: match-regex@emoji
+  -e, --emoji <m@r>     Emoji rule: match-regex@emoji (match,emoji also accepted)
       --add-emoji       Prepend emoji using the emoji rules
       --remove-emoji    Strip leading emoji from names
       --auto-country    Prefix names lacking a country with the server's ISO code
@@ -246,7 +258,7 @@ Convert options:
       --dev-id <id>     Quantumult X device ID for remote-script signatures
       --new-field-name  Use Clash's new field names (proxies/proxy-groups, default true; use --new-field-name=false for legacy Proxy keys)
       --legacy          Use legacy Clash field names (Proxy/Proxy Group/Rule)
-      --dedupe          Drop duplicate nodes (same type/server/port/name)
+      --dedupe          Drop duplicate nodes (same type/server/port/name/credentials)
       --surge-version <n> Surge version for the surge target (default 5)
       --with-rules      Attach rules + default proxy groups (default: on, kept for compat)
       --no-rules        Strip rules and default groups (default: off)
@@ -407,7 +419,7 @@ async function runConvert(state: ArgState): Promise<number> {
     clashFlavor: parseClashFlavor(flag(state, "flavor")),
     clashNewFieldName: resolveClashNewFieldName(state),
     dedupe: flagBool(state, "dedupe"),
-    emojiArray: parseEmojiRules(flagAll(state, "emoji")),
+    emojiArray: parseMatchReplaceRules(flagAll(state, "emoji"), true),
     excludeCountries: parseNameRemove([
       ...flagAll(state, "exclude-country"),
       ...flagAll(state, "exclude_country"),
@@ -420,7 +432,7 @@ async function runConvert(state: ArgState): Promise<number> {
       ...flagAll(state, "include_country"),
     ]).map((code) => code.toUpperCase()),
     includeRemarks: [],
-    nameRegexArray: parseRenameRules([
+    nameRegexArray: parseMatchReplaceRules([
       ...flagAll(state, "name-regex"),
       ...flagAll(state, "name_regex"),
     ]),
@@ -431,7 +443,7 @@ async function runConvert(state: ArgState): Promise<number> {
     nodeList: flagBool(state, "node-list"),
     quanxDevId: flag(state, "dev-id") ?? "",
     removeEmoji: flagBool(state, "remove-emoji"),
-    renameArray: parseRenameRules(flagAll(state, "rename")),
+    renameArray: parseMatchReplaceRules(flagAll(state, "rename")),
     sortFlag: flagBool(state, "sort"),
   };
 

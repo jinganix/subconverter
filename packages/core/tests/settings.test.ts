@@ -9,6 +9,7 @@ import {
   parseRegexMatch,
   parseRequestSettings,
   parseRulesetConfig,
+  queryBoolFlag,
 } from "../src/index";
 
 describe("parseGroupTimes", () => {
@@ -172,6 +173,16 @@ describe("parseRequestSettings", () => {
     expect(parseRequestSettings("append-type=true").appendType).toBe(true);
     expect(parseRequestSettings("new-field-name=false").newFieldName).toBe(false);
     expect(parseRequestSettings("ADD_EMOJI=TRUE").addEmoji).toBe(true);
+  });
+
+  it("accepts the documented yes/on boolean literals", () => {
+    expect(parseRequestSettings("add_emoji=yes").addEmoji).toBe(true);
+    expect(parseRequestSettings("add_emoji=on").addEmoji).toBe(true);
+    expect(parseRequestSettings("add_emoji=no").addEmoji).toBe(false);
+    expect(parseRequestSettings("add_emoji=off").addEmoji).toBe(false);
+    expect(queryBoolFlag("dedupe=yes", "dedupe")).toBe(true);
+    expect(queryBoolFlag("no_rules=on", "no_rules")).toBe(true);
+    expect(queryBoolFlag("dedupe=off", "dedupe")).toBe(false);
   });
 
   it("parses sort and dedupe flags", () => {

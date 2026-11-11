@@ -101,7 +101,7 @@ export interface MellowOptions {
   overwriteOriginalRules?: boolean;
 }
 
-/** Convert nodes into a Mellow (`mellow.conf`) configuration string. */
+/** Convert nodes into a Mellow (`mellow.conf`) configuration string (the input is left untouched). */
 export function toMellow(
   nodes: Proxy[],
   extraProxyGroup: ProxyGroupConfig[],
@@ -112,7 +112,9 @@ export function toMellow(
   const endpoints: string[] = [];
   const nodelist: Proxy[] = [];
 
-  for (const x of nodes) {
+  for (const src of nodes) {
+    // Work on a copy so the caller's nodes keep their remarks intact.
+    const x = { ...src };
     if (settings.appendProxyType) {
       x.remark = `[${proxyTypeName(x.type)}] ${x.remark}`;
     }

@@ -101,7 +101,9 @@ function buildSurge(
   const sectionOrder: string[] = [];
   let localPort = 1080;
 
-  for (const x of nodes) {
+  for (const src of nodes) {
+    // Work on a copy so the caller's nodes keep their remarks intact.
+    const x = { ...src };
     if (settings.appendProxyType) {
       x.remark = `[${proxyTypeName(x.type)}] ${x.remark}`;
     }
@@ -396,7 +398,7 @@ function buildSurge(
   return { extraSections, groups, proxies, sectionOrder };
 }
 
-/** Convert nodes into a Surge configuration string. */
+/** Convert nodes into a Surge configuration string (the input array is left untouched). */
 export function toSurge(
   nodes: Proxy[],
   extraProxyGroup: ProxyGroupConfig[],

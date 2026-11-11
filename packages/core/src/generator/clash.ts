@@ -562,7 +562,9 @@ export function buildClash(
   const nodeList: Proxy[] = [];
   const remarksList: string[] = [];
 
-  for (const x of nodes) {
+  for (const src of nodes) {
+    // Work on a copy so the caller's nodes keep their remarks intact.
+    const x = { ...src };
     const type = proxyTypeName(x.type);
     if (settings.appendProxyType) {
       x.remark = `[${type}] ${x.remark}`;
@@ -706,7 +708,7 @@ export function stringifyClash(doc: Record<string, unknown>): string {
   });
 }
 
-/** Convert nodes into a Clash YAML configuration string. */
+/** Convert nodes into a Clash YAML configuration string (the input array is left untouched). */
 export function toClash(
   nodes: Proxy[],
   extraProxyGroup: ProxyGroupConfig[],
