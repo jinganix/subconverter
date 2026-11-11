@@ -17,13 +17,28 @@ function hasArg(query: string, key: string): boolean {
   return getAllUrlArgs(query, key).length > 0;
 }
 
+/**
+ * `true` for the documented affirmative literals (`true`/`1`/`yes`/`on`,
+ * plus a bare `?flag`). Shared by `boolArg` and `queryBoolFlag` so every
+ * boolean switch accepts the same values the README documents.
+ */
+function isAffirmative(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "" ||
+    normalized === "true" ||
+    normalized === "1" ||
+    normalized === "yes" ||
+    normalized === "on"
+  );
+}
+
 function boolArg(query: string, key: string): boolean {
   // A missing key means `false`; a bare `?flag` (no value) means `true`.
   if (!hasArg(query, key)) {
     return false;
   }
-  const value = getUrlArg(query, key).toLowerCase();
-  return value === "true" || value === "1" || value === "";
+  return isAffirmative(getUrlArg(query, key));
 }
 
 function triArg(query: string, key: string): TriBool {
@@ -89,8 +104,7 @@ export function queryBoolFlag(query: string, ...keys: string[]): boolean | undef
   for (const key of keys) {
     for (const raw of getAllUrlArgs(query, key)) {
       found = true;
-      const normalized = raw.trim().toLowerCase();
-      if (normalized === "" || normalized === "true" || normalized === "1") {
+      if (isAffirmative(raw)) {
         result = true;
       }
     }

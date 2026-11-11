@@ -3,11 +3,13 @@ import { describe, expect, it } from "vitest";
 import type { Proxy, ProxyGroupConfig } from "../src/index";
 import {
   BalanceStrategy,
+  base64Decode,
   ProxyGroupType,
   ProxyType,
   createExtraSettings,
   createProxy,
   createProxyGroupConfig,
+  dedupeNodes,
   generate,
   hysteria2Construct,
   hysteriaConstruct,
@@ -590,5 +592,44 @@ describe("links edges", () => {
 describe("generate edges", () => {
   it("throws on invalid sing-box base config", () => {
     expect(() => generate([ss()], { baseConf: "not json", target: "singbox" as never })).toThrow();
+  });
+});
+
+describe("dedupe and ssd fixes", () => {
+  it("keeps nodes that differ only by credentials", () => {
+    const a = createProxy();
+    ssConstruct(a, {
+      group: "G",
+      method: "aes-256-gcm",
+      password: "pw1",
+      port: 8388,
+      remark: "dup",
+      server: "1.2.3.4",
+    });
+    const b = createProxy();
+    ssConstruct(b, {
+      group: "G",
+      method: "aes-256-gcm",
+      password: "pw2",
+      port: 8388,
+      remark: "dup",
+      server: "1.2.3.4",
+    });
+    expect(dedupeNodes([a, b])).toBe(0);
+  });
+
+  it("renders ssd expiry in UTC regardless of server timezone", () => {
+    const a = createProxy();
+    ssConstruct(a, {
+      group: "G",
+      method: "aes-256-gcm",
+      password: "pw",
+      port: 8388,
+      remark: "n",
+      server: "1.2.3.4",
+    });
+    const ssd = proxyToSsd([a], "G", "upload=1; download=2; total=3; expire=1700000000");
+    const doc = JSON.parse(base64Decode(ssd.slice("ssd://".length))) as { expiry?: string };
+    expect(doc.expiry).toBe("2023-11-14 22:13");
   });
 });

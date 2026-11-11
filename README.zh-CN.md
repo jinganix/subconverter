@@ -126,7 +126,7 @@ Clash YAML → Surge INI → base64/明文链接列表）。
 - `trojan`（`trojan.txt`，`text/plain`）——base64 Trojan 链接列表。丢弃非 Trojan。
 - `mixed`（`mixed.txt`，`text/plain`）——base64 混合 SS/SSR/VMess/Trojan 列表（经典
   子集）。丢弃 VLESS、Hysteria2、TUIC、AnyTLS。
-- `nodelist`（`nodelist.txt`，`text/plain`）——纯节点列表，无分组/包装。不丢节点。
+- `nodelist`（`nodelist.txt`，`text/plain`）——纯文本（非 base64）节点列表，无分组/包装。与 `mixed` 相同的经典 SS/SSR/VMess/Trojan 子集：丢弃 VLESS、Hysteria2、TUIC、AnyTLS。
 - `ssd`（`ssd.txt`，`text/plain`）——`ssd://` 文档。丢弃非 SS。
 - `sssub`（`sssub.json`，`application/json`）——SIP008 JSON。丢弃非 SS。
 - `auto`——仅输入检测，不可作为 `/sub?target=`。

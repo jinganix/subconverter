@@ -3,12 +3,26 @@ import { ProxyType } from "../types/proxy";
 import type { RegexMatchConfig } from "../types/settings";
 import { formatCountryRemark, hasRegionName, normalizeCountryCode } from "../utils/country";
 
-function toRegex(pattern: string): RegExp {
-  try {
-    return new RegExp(pattern);
-  } catch {
-    return /$^/;
+/** Compiled remark/matcher regexes; rules repeat per node so cache them. */
+const regexCache = new Map<string, RegExp | undefined>();
+
+function cachedRegex(pattern: string): RegExp | undefined {
+  const cached = regexCache.get(pattern);
+  if (cached !== undefined) {
+    return cached;
   }
+  try {
+    const compiled = new RegExp(pattern);
+    regexCache.set(pattern, compiled);
+    return compiled;
+  } catch {
+    regexCache.set(pattern, undefined);
+    return undefined;
+  }
+}
+
+function toRegex(pattern: string): RegExp {
+  return cachedRegex(pattern) ?? /$^/;
 }
 
 function regFind(value: string, pattern: string): boolean {
@@ -32,13 +46,25 @@ function regMatch(value: string, pattern: string): boolean {
 }
 
 function regReplace(value: string, pattern: string, replacement: string): string {
-  try {
-    return value.replace(new RegExp(pattern, "g"), replacement);
-  } catch {
-    // Malformed user-supplied pattern: skip it instead of failing the whole
-    // conversion (rename/emoji rules come from configs and query params).
+  const key = `g \u0000 ${pattern} `;
+  let compiled = regexCache.get(key);
+  if (compiled === undefined && !regexCache.has(key)) {
+    try {
+      compiled = new RegExp(pattern, "g");
+    } catch {
+      // Malformed user-supplied pattern: skip it instead of failing the whole
+      // conversion (rename/emoji rules come from configs and query params).
+      compiled = undefined;
+    }
+    regexCache.set(key, compiled);
+  }
+  if (!compiled) {
     return value;
   }
+  // Fresh global regexes start at `lastIndex` 0; the cached one is only
+  // ever used synchronously here, but reset defensively for reuse safety.
+  compiled.lastIndex = 0;
+  return value.replace(compiled, replacement);
 }
 
 const TYPE_MATCH_NAMES: Partial<Record<ProxyType, string>> = {
@@ -58,8 +84,16 @@ const TYPE_MATCH_NAMES: Partial<Record<ProxyType, string>> = {
   [ProxyType.WireGuard]: "WIREGUARD",
 };
 
+/** Parsed `matchRange` outcomes; group/port rules repeat per node. */
+const rangeCache = new Map<string, boolean>();
+
 /** Does `target` fall within a subconverter range expression like `1-5,8,!3`? */
 export function matchRange(range: string, target: number): boolean {
+  const cacheKey = JSON.stringify([range, target]);
+  const cached = rangeCache.get(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
   const items = range.split(",");
   let match = false;
   for (const item of items) {
@@ -100,6 +134,7 @@ export function matchRange(range: string, target: number): boolean {
       }
     }
   }
+  rangeCache.set(cacheKey, match);
   return match;
 }
 
@@ -453,12 +488,14 @@ export function preprocessNodes(nodes: Proxy[], options: PreprocessOptions): voi
   }
 }
 
-/** Remove nodes that share a type, server, port, and remark. Returns the count removed. */
+/** Remove duplicate nodes. Returns the count removed. */
 export function dedupeNodes(nodes: Proxy[]): number {
   const seen = new Set<string>();
   const kept: Proxy[] = [];
   for (const node of nodes) {
-    const key = `${node.type}\u0000${node.hostname}\u0000${node.port}\u0000${node.remark}`;
+    // Credentials are part of the key: two nodes on the same server/port
+    // with different passwords or user ids are distinct subscriptions.
+    const key = `${node.type}\u0000${node.hostname}\u0000${node.port}\u0000${node.remark}\u0000${node.encryptMethod}\u0000${node.password}\u0000${node.userId}\u0000${node.username}`;
     if (seen.has(key)) {
       continue;
     }

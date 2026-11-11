@@ -343,3 +343,58 @@ describe("dispatcher edge cases", () => {
     expect(node.type).toBe(ProxyType.Unknown);
   });
 });
+
+describe("credential delimiter edge cases", () => {
+  it("accepts uppercase UUIDs in std vmess links", () => {
+    const node = createProxy();
+    explodeStdVmess("vmess://tcp:B831381D-6324-4D53-AD4F-8CDA48B30811-0@1.2.3.4:443", node);
+    expect(node.type).toBe(ProxyType.VMess);
+    expect(node.userId).toBe("B831381D-6324-4D53-AD4F-8CDA48B30811");
+  });
+
+  it("keeps @ inside socks passwords", () => {
+    const a = parseLink(`socks://${base64Encode("u:p@ss@1.2.3.4:1080")}`);
+    expect(a?.username).toBe("u");
+    expect(a?.password).toBe("p@ss");
+    expect(a?.hostname).toBe("1.2.3.4");
+  });
+
+  it("keeps @ and : inside http-sub passwords", () => {
+    const a = parseLink(`http://${base64Encode("u:p@ss:w@1.2.3.4:8080")}`);
+    expect(a?.username).toBe("u");
+    expect(a?.password).toBe("p@ss:w");
+    expect(a?.hostname).toBe("1.2.3.4");
+  });
+
+  it("decodes an encoded ? inside hysteria2 query passwords", () => {
+    const a = parseLink("hy2://1.2.3.4:443?password=p%3Fss&sni=h#N");
+    expect(a?.password).toBe("p?ss");
+    expect(a?.sni).toBe("h");
+  });
+});
+
+describe("vmess fragment edge cases", () => {
+  it("strips a #fragment before base64-decoding the payload", () => {
+    const payload = base64Encode(
+      JSON.stringify({
+        add: "1.2.3.4",
+        aid: "0",
+        id: "b831381d-6324-4d53-ad4f-8cda48b30811",
+        net: "tcp",
+        port: "443",
+        ps: "VMESS-JSON",
+        tls: "",
+        type: "none",
+        v: "2",
+      }),
+    );
+    const withPs = parseLink(`vmess://${payload}#FRAG`);
+    expect(withPs?.type).toBe(ProxyType.VMess);
+    expect(withPs?.remark).toBe("VMESS-JSON");
+    const withoutPs = parseLink(
+      `vmess://${base64Encode(JSON.stringify({ add: "1.2.3.4", port: "443", v: "2" }))}#FALLBACK`,
+    );
+    expect(withoutPs?.type).toBe(ProxyType.VMess);
+    expect(withoutPs?.remark).toBe("FALLBACK");
+  });
+});

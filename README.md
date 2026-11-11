@@ -131,8 +131,9 @@ types the target silently drops.
 - `trojan` (`trojan.txt`, `text/plain`) — base64 Trojan-link list. Drops non-Trojan.
 - `mixed` (`mixed.txt`, `text/plain`) — base64 mixed SS/SSR/VMess/Trojan list (classic
   subset). Drops VLESS, Hysteria2, TUIC, AnyTLS.
-- `nodelist` (`nodelist.txt`, `text/plain`) — bare node list, no groups or wrapper. Drops
-  nothing.
+- `nodelist` (`nodelist.txt`, `text/plain`) — bare (unencoded) node list, no groups or
+  wrapper. Same classic SS/SSR/VMess/Trojan subset as `mixed`: drops VLESS, Hysteria2,
+  TUIC, AnyTLS.
 - `ssd` (`ssd.txt`, `text/plain`) — `ssd://` document. Drops non-SS.
 - `sssub` (`sssub.json`, `application/json`) — SIP008 JSON. Drops non-SS.
 - `auto` — input detection only; not a valid `/sub?target=`.

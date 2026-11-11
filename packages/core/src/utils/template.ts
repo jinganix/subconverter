@@ -18,12 +18,17 @@ export function renderTemplate(content: string, vars: TemplateVars): string {
 /** `true` when the content contains any `{{ ... }}` placeholder. */
 export function hasTemplatePlaceholders(content: string): boolean {
   INTERPOLATION.lastIndex = 0;
-  return INTERPOLATION.test(content);
+  const found = INTERPOLATION.test(content);
+  INTERPOLATION.lastIndex = 0;
+  return found;
 }
 
 /** Collect the variable names referenced by a template body. */
 export function templateVariableNames(content: string): string[] {
   const names = new Set<string>();
+  // `matchAll` starts from the shared regex's `lastIndex`, which a prior
+  // `hasTemplatePlaceholders` call may have advanced; reset it first.
+  INTERPOLATION.lastIndex = 0;
   for (const match of content.matchAll(INTERPOLATION)) {
     names.add(match[1] as string);
   }

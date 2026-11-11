@@ -188,7 +188,7 @@ export interface QuanOptions {
   rules?: { section: string; lines: string[] };
 }
 
-/** Convert nodes into a Quantumult configuration string. */
+/** Convert nodes into a Quantumult configuration string (the input array is left untouched). */
 export function toQuan(
   nodes: Proxy[],
   extraProxyGroup: ProxyGroupConfig[],
@@ -199,7 +199,9 @@ export function toQuan(
   const serverLines: string[] = [];
   const nodelist: Proxy[] = [];
 
-  for (const x of nodes) {
+  for (const src of nodes) {
+    // Work on a copy so the caller's nodes keep their remarks intact.
+    const x = { ...src };
     if (settings.appendProxyType) {
       x.remark = `[${proxyTypeName(x.type)}] ${x.remark}`;
     }

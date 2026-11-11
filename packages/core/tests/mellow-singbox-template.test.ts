@@ -199,3 +199,11 @@ describe("generate dispatch includes all formats", () => {
     }
   });
 });
+
+describe("template regex state", () => {
+  it("lists every variable even after a placeholder check", () => {
+    const body = "a {{ name }} b {{clash.dns.port}} c";
+    expect(hasTemplatePlaceholders(body)).toBe(true);
+    expect(templateVariableNames(body).sort()).toEqual(["clash.dns.port", "name"]);
+  });
+});

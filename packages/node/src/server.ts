@@ -688,7 +688,7 @@ export async function convertSubRequest(
   for (const { index, result } of ordered) {
     if (result.status === "fulfilled") {
       bodies.push({ body: result.value.body, groupId: index });
-      combinedLength += result.value.body.length + 1;
+      combinedLength += Buffer.byteLength(result.value.body, "utf-8") + 1;
       if (combinedLength > MAX_BODY_BYTES * MAX_SUBSCRIPTION_URLS) {
         throw Object.assign(new Error("Combined subscription body exceeds size limit"), {
           statusCode: 502,

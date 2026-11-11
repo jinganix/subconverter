@@ -63,6 +63,13 @@ describe("cli e2e", () => {
     }
   });
 
+  it("accepts yes/on as boolean flag values", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#B\ntrojan://pw@5.6.7.8:443#A");
+    stdout = "";
+    expect(await runCli(["convert", "--file", path, "--target", "clash", "--sort", "yes"])).toBe(0);
+    expect(stdout.indexOf("name: A")).toBeLessThan(stdout.indexOf("name: B"));
+  });
+
   it("converts a file to Clash on stdout", async () => {
     const path = await writeSub("trojan://pw@1.2.3.4:443#A\ntrojan://pw@5.6.7.8:443#B");
     expect(await runCli(["convert", "--file", path, "--target", "clash"])).toBe(0);
@@ -496,6 +503,25 @@ describe("cli argument parsing", () => {
       ]),
     ).toBe(0);
     expect(stdout).toContain("name: US node");
+  });
+
+  it("accepts the comma emoji form shared with INI configs and query params", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#US node");
+    stdout = "";
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "clash",
+        "--no-rules",
+        "--emoji",
+        "US,🇺🇸",
+        "--add-emoji",
+      ]),
+    ).toBe(0);
+    expect(stdout).toContain("🇺🇸 US ");
   });
 
   it("trims --name-remove lists and merges a local --base", async () => {

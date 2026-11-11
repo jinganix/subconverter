@@ -38,7 +38,7 @@ export async function loadRuleset(
   let content = "";
   if (url.startsWith("[]")) {
     content = url;
-  } else if (url.startsWith("http://") || url.startsWith("https://")) {
+  } else if (/^https?:\/\//i.test(url)) {
     content = await fetchSubscription(url, options);
   } else if (url !== "") {
     content = await readSubscriptionFile(url);

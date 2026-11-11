@@ -170,6 +170,11 @@ describe("parseSubscription", () => {
     expect(nodes).toHaveLength(2);
   });
 
+  it("ignores indentation around each link", () => {
+    const nodes = parseSubscription("  trojan://p@1.2.3.4:443#A\n\ttrojan://p@5.6.7.8:443#B\n");
+    expect(nodes.map((n) => n.remark)).toEqual(["A", "B"]);
+  });
+
   it("parses a Clash YAML config", () => {
     const yaml = [
       "proxies:",
