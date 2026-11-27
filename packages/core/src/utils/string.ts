@@ -21,12 +21,183 @@ export function toInt(value: string | number | undefined | null): number {
   if (typeof value === "number") {
     return Number.isFinite(value) ? Math.trunc(value) : 0;
   }
-  const match = /[+-]?\d+/.exec(value);
+  const match = /^\s*[+-]?\d+/.exec(value);
   if (!match) {
     return 0;
   }
   const parsed = Number.parseInt(match[0], 10);
-  return Number.isNaN(parsed) ? 0 : parsed;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/** Maximum length for a user-supplied regex pattern (ReDoS guard). */
+export const MAX_USER_PATTERN_LENGTH = 100;
+
+/**
+ * `true` when a user-supplied regex pattern risks catastrophic backtracking:
+ * over the length cap, containing nested quantifiers, or piling up too many
+ * quantified atoms. Callers should reject such patterns instead of compiling
+ * them.
+ *
+ * Detects nested quantifiers with a linear stack scan instead of a regex:
+ * a group `(`...`)` that is itself quantified (`*`/`+`/`?`/`{` follows the
+ * closing paren) and contains a quantified token inside (e.g. `((a+))+`
+ * defeats `[^)]*`-based guards because the inner `)` breaks the match).
+ * Consecutive quantifiers from the legacy guard (`++`, `*+`, `+*`) are
+ * rejected too; lazy forms (`+?`, `*?`, `??`) stay allowed. Escapes and
+ * character classes are skipped so literals like `\+` or `[+]` stay safe.
+ *
+ * Sequential quantified atoms (`a*a*a*...`) are budgeted: more than two
+ * unescaped/unclassed `*`/`+`/`?`/`{` (group quantifiers included) is unsafe.
+ * The budget keeps common filters (`\d+`, `(ab)+`, `香港|HK`) working
+ * while blocking partition explosions (`a*` x 25 vs `a` x 30, `a*a*a*b`
+ * on `a` x 20000 which is O(n^3) with three atoms).
+ */
+export function isUnsafeRegexPattern(pattern: string): boolean {
+  if (pattern.length > MAX_USER_PATTERN_LENGTH) {
+    return true;
+  }
+  const groupStarts: number[] = [];
+  let escaped = false;
+  let inClass = false;
+  let prevQuant: string | null = null;
+  let quantCount = 0;
+  for (let i = 0; i < pattern.length; i += 1) {
+    const c = pattern[i] as string;
+    if (escaped) {
+      escaped = false;
+      prevQuant = null;
+      continue;
+    }
+    if (c === "\\") {
+      escaped = true;
+      prevQuant = null;
+      continue;
+    }
+    if (inClass) {
+      if (c === "]") {
+        inClass = false;
+      }
+      prevQuant = null;
+      continue;
+    }
+    if (c === "[") {
+      inClass = true;
+      prevQuant = null;
+      continue;
+    }
+    if (c === "(") {
+      groupStarts.push(i);
+      prevQuant = null;
+      continue;
+    }
+    if (c === ")") {
+      const start = groupStarts.pop();
+      const next = pattern[i + 1] as string | undefined;
+      const quantified = next === "*" || next === "+" || next === "?" || next === "{";
+      if (quantified && start !== undefined) {
+        let innerEscaped = false;
+        let innerClass = false;
+        let innerDepth = 0;
+        for (let j = start + 1; j < i; j += 1) {
+          const d = pattern[j] as string;
+          if (innerEscaped) {
+            innerEscaped = false;
+            continue;
+          }
+          if (d === "\\") {
+            innerEscaped = true;
+            continue;
+          }
+          if (innerClass) {
+            if (d === "]") {
+              innerClass = false;
+            }
+            continue;
+          }
+          if (d === "[") {
+            innerClass = true;
+            continue;
+          }
+          if (d === "(") {
+            innerDepth += 1;
+            continue;
+          }
+          if (d === ")") {
+            if (innerDepth > 0) {
+              innerDepth -= 1;
+            }
+            continue;
+          }
+          // Skip the `?` of a `(?:…)`, `(?=…)`, `(?!…)` opener: it is group
+          // syntax, not a quantifier.
+          if (d === "?" && pattern[j - 1] === "(") {
+            continue;
+          }
+          if (d === "*" || d === "+" || d === "?" || d === "{") {
+            return true;
+          }
+          // Alternation at the group's own level (`(a|aa)+$`) can overlap
+          // and backtrack exponentially; kept from the legacy guard.
+          if (d === "|" && innerDepth === 0) {
+            return true;
+          }
+        }
+      }
+      if (quantified) {
+        quantCount += 1;
+        if (quantCount > 2) {
+          return true;
+        }
+        // Consume the group's own quantifier so it cannot trip the
+        // consecutive check below; a further quantifier (`(...)+*`) still
+        // does via `prevQuant`.
+        if (next === "{") {
+          let k = i + 2;
+          while (k < pattern.length && pattern[k] !== "}") {
+            k += 1;
+          }
+          i = k;
+        } else {
+          i += 1;
+        }
+        prevQuant = next ?? null;
+      } else {
+        prevQuant = null;
+      }
+      continue;
+    }
+    if (c === "*" || c === "+" || c === "?") {
+      // The `?` of a `(?:…)`, `(?=…)`, `(?!…)` opener is group syntax,
+      // not a quantifier, so it does not spend the atom budget. Likewise a
+      // lazy trailing `?` (`+?`/`*?`/`??`/`{m,n}?`) modifies the preceding
+      // atom instead of adding a new one (`^abc@(.+?)\..*$` is two atoms,
+      // not three), so it does not spend the budget either.
+      const isGroupSyntax = c === "?" && i > 0 && pattern[i - 1] === "(";
+      const prev = i > 0 ? pattern[i - 1] : "";
+      const isLazy = c === "?" && (prev === "*" || prev === "+" || prev === "?" || prev === "}");
+      if (!(isGroupSyntax || isLazy)) {
+        quantCount += 1;
+        if (quantCount > 2) {
+          return true;
+        }
+      }
+      if ((prevQuant === "+" && (c === "+" || c === "*")) || (prevQuant === "*" && c === "+")) {
+        return true;
+      }
+      prevQuant = c;
+      continue;
+    }
+    if (c === "{") {
+      quantCount += 1;
+      if (quantCount > 2) {
+        return true;
+      }
+      prevQuant = c;
+      continue;
+    }
+    prevQuant = null;
+  }
+  return false;
 }
 
 /** Parse a boolean-ish value ("true"/"yes"/"1"/"on" and the matching negatives). */

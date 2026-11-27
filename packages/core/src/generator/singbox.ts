@@ -350,6 +350,8 @@ export function toSingBox(
   }
 
   const remarksList: string[] = [];
+  const seenRemarks = new Set<string>();
+  const remarkCounts = new Map<string, number>();
   const nodelist: Proxy[] = [];
   for (const src of nodes) {
     // Work on a copy so the caller's nodes keep their remarks intact.
@@ -357,7 +359,7 @@ export function toSingBox(
     if (settings.appendProxyType) {
       x.remark = `[${proxyTypeName(x.type)}] ${x.remark}`;
     }
-    const remark = processRemark(x.remark, remarksList, false);
+    const remark = processRemark(x.remark, remarksList, false, seenRemarks, remarkCounts);
     x.remark = remark;
     const outbound = buildOutbound(x, settings, remark);
     if (!outbound) {
@@ -366,6 +368,7 @@ export function toSingBox(
     outbounds.push(outbound);
     nodelist.push(x);
     remarksList.push(remark);
+    seenRemarks.add(remark);
   }
 
   if (!options.nodeList) {

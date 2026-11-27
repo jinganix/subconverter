@@ -17,11 +17,26 @@ import {
   wireGuardConstruct,
 } from "./construct";
 import { explodeNetch } from "./netch";
+import { MAX_NODES } from "../settings/request-params";
 import type { Proxy } from "../types/proxy";
 import { DEFAULT_GROUPS, createProxy } from "../types/proxy";
 import type { TriBool } from "../types/tribool";
 import { base64Encode } from "../utils/base64";
 import { split, toInt, trim } from "../utils/string";
+
+/** Throw a 400 once the in-parse node cap is exceeded (DoS guard). */
+function throwTooManyNodes(limit: number): never {
+  throw Object.assign(new Error(`Too many proxy nodes (max ${String(limit)}).`), {
+    statusCode: 400,
+  });
+}
+
+/** Abort in-parse once `nodes.length` exceeds `limit`. Call after each push. */
+function assertNodeLimit(nodes: Proxy[], limit: number): void {
+  if (nodes.length > limit) {
+    throwTooManyNodes(limit);
+  }
+}
 
 /** JSON array items as objects; primitives/`null` become an empty entry. */
 function asRecord(value: unknown): Record<string, unknown> {
@@ -56,8 +71,13 @@ function get(obj: any, key: string | number): unknown {
   return obj !== null && typeof obj === "object" ? obj[key] : undefined;
 }
 
-/** Parse a Clash `proxies:` list into normalized nodes. */
-export function explodeClash(root: any, nodes: Proxy[]): void {
+/**
+ * Parse a Clash `proxies:` list into normalized nodes.
+ *
+ * Aborts in-parse once `nodes.length` exceeds `limit` so a hostile body
+ * cannot force a full 125k-element `Proxy[]` before the cap is enforced.
+ */
+export function explodeClash(root: any, nodes: Proxy[], limit: number = MAX_NODES): void {
   const section = get(root, "proxies") !== undefined ? "proxies" : "Proxy";
   const list = get(root, section) as any[] | undefined;
   if (!Array.isArray(list)) {
@@ -70,8 +90,13 @@ export function explodeClash(root: any, nodes: Proxy[]): void {
     try {
       if (parseClashNode(single, nodes, index)) {
         index += 1;
+        assertNodeLimit(nodes, limit);
       }
-    } catch {
+    } catch (error) {
+      // The node-cap abort must propagate; only malformed entries are skipped.
+      if ((error as { statusCode?: unknown } | undefined)?.statusCode === 400) {
+        throw error;
+      }
       // Skip the broken node, keep the rest.
     }
   }
@@ -621,7 +646,10 @@ function collectKeyValues(
 }
 
 /** Parse a Surge/Loon `[Proxy]` configuration into nodes. */
-export function explodeSurge(surge: string, nodes: Proxy[]): boolean {
+/**
+ * Parse a Surge/Loon `[Proxy]` section. Aborts in-parse over `limit` (DoS guard).
+ */
+export function explodeSurge(surge: string, nodes: Proxy[], limit: number = MAX_NODES): boolean {
   let text = surge;
   if (text.includes("[Proxy]")) {
     text = text.replace(/^[\s\S]*?\[/, "[");
@@ -1106,6 +1134,7 @@ export function explodeSurge(surge: string, nodes: Proxy[]): boolean {
     node.id = index;
     nodes.push(node);
     index += 1;
+    assertNodeLimit(nodes, limit);
   }
   return nodes.length > startCount;
 }
@@ -1438,7 +1467,11 @@ export function parsePeers(node: Proxy, data: string): void {
 }
 
 /** Parse a Clash/plain YAML string into nodes (returns count). */
-export function parseClashText(content: string, nodes: Proxy[]): boolean {
+export function parseClashText(
+  content: string,
+  nodes: Proxy[],
+  limit: number = MAX_NODES,
+): boolean {
   try {
     const root = parseYaml(content);
     if (
@@ -1446,31 +1479,44 @@ export function parseClashText(content: string, nodes: Proxy[]): boolean {
       typeof root === "object" &&
       (get(root, "Proxy") !== undefined || get(root, "proxies") !== undefined)
     ) {
-      explodeClash(root, nodes);
+      explodeClash(root, nodes, limit);
       return true;
     }
-  } catch {
+  } catch (error) {
+    // The node-cap abort (statusCode 400) must propagate; other parse
+    // failures mean "not Clash YAML" and return false.
+    if ((error as { statusCode?: unknown } | undefined)?.statusCode === 400) {
+      throw error;
+    }
     return false;
   }
   return false;
 }
 
-/** Parse an ss/ssr/v2ray configuration JSON blob (single or list). */
-export function parseConfContent(content: string, nodes: Proxy[]): boolean {
+/**
+ * Parse an ss/ssr/v2ray configuration JSON blob (single or list).
+ * Threads `limit` to every `explode*` so the cap aborts in-parse instead of
+ * after a full `Proxy[]` is built.
+ */
+export function parseConfContent(
+  content: string,
+  nodes: Proxy[],
+  limit: number = MAX_NODES,
+): boolean {
   if (content.includes('"version"')) {
-    explodeSsConf(content, nodes);
+    explodeSsConf(content, nodes, limit);
   } else if (content.includes('"serverSubscribes"')) {
-    explodeSsrConf(content, nodes);
+    explodeSsrConf(content, nodes, limit);
   } else if (content.includes('"uiItem"') || content.includes("vnext")) {
-    explodeVmessConf(content, nodes);
+    explodeVmessConf(content, nodes, limit);
   } else if (content.includes('"proxy_apps"')) {
-    explodeSsAndroid(content, nodes);
+    explodeSsAndroid(content, nodes, limit);
   } else if (content.includes('"idInUse"')) {
-    explodeSstap(content, nodes);
+    explodeSstap(content, nodes, limit);
   } else if (content.includes('"local_address"') && content.includes('"local_port"')) {
-    explodeSsrConf(content, nodes);
+    explodeSsrConf(content, nodes, limit);
   } else if (content.includes('"ModeFileNameType"')) {
-    explodeNetchConf(content, nodes);
+    explodeNetchConf(content, nodes, limit);
   } else {
     return false;
   }
@@ -1478,7 +1524,7 @@ export function parseConfContent(content: string, nodes: Proxy[]): boolean {
 }
 
 /** Parse a Shadowsocks Android (`ssconf`) JSON config. */
-export function explodeSsConf(content: string, nodes: Proxy[]): void {
+export function explodeSsConf(content: string, nodes: Proxy[], limit: number = MAX_NODES): void {
   let json: any;
   try {
     json = JSON.parse(content);
@@ -1521,11 +1567,12 @@ export function explodeSsConf(content: string, nodes: Proxy[]): void {
     node.id = index;
     nodes.push(node);
     index += 1;
+    assertNodeLimit(nodes, limit);
   }
 }
 
 /** Parse a Shadowsocks Android (`com.github.shadowsocks`) node array. */
-export function explodeSsAndroid(content: string, nodes: Proxy[]): void {
+export function explodeSsAndroid(content: string, nodes: Proxy[], limit: number = MAX_NODES): void {
   let json: any;
   try {
     json = JSON.parse(`{"nodes":${content}}`);
@@ -1561,11 +1608,12 @@ export function explodeSsAndroid(content: string, nodes: Proxy[]): void {
     node.id = index;
     nodes.push(node);
     index += 1;
+    assertNodeLimit(nodes, limit);
   }
 }
 
 /** Parse a ShadowsocksR config JSON. */
-export function explodeSsrConf(content: string, nodes: Proxy[]): void {
+export function explodeSsrConf(content: string, nodes: Proxy[], limit: number = MAX_NODES): void {
   let json: any;
   try {
     json = JSON.parse(content);
@@ -1612,6 +1660,7 @@ export function explodeSsrConf(content: string, nodes: Proxy[]): void {
     }
     node.id = index;
     nodes.push(node);
+    assertNodeLimit(nodes, limit);
     return;
   }
 
@@ -1644,11 +1693,12 @@ export function explodeSsrConf(content: string, nodes: Proxy[]): void {
     node.id = index;
     nodes.push(node);
     index += 1;
+    assertNodeLimit(nodes, limit);
   }
 }
 
 /** Parse a v2rayN config JSON. */
-export function explodeVmessConf(content: string, nodes: Proxy[]): void {
+export function explodeVmessConf(content: string, nodes: Proxy[], limit: number = MAX_NODES): void {
   let json: any;
   try {
     json = JSON.parse(content);
@@ -1722,6 +1772,7 @@ export function explodeVmessConf(content: string, nodes: Proxy[]): void {
         type,
       });
       nodes.push(node);
+      assertNodeLimit(nodes, limit);
     }
     return;
   }
@@ -1803,11 +1854,12 @@ export function explodeVmessConf(content: string, nodes: Proxy[]): void {
     node.id = index;
     nodes.push(node);
     index += 1;
+    assertNodeLimit(nodes, limit);
   }
 }
 
 /** Parse an SSTap config JSON. */
-export function explodeSstap(content: string, nodes: Proxy[]): void {
+export function explodeSstap(content: string, nodes: Proxy[], limit: number = MAX_NODES): void {
   let json: any;
   try {
     json = JSON.parse(content);
@@ -1865,11 +1917,12 @@ export function explodeSstap(content: string, nodes: Proxy[]): void {
     node.id = index;
     nodes.push(node);
     index += 1;
+    assertNodeLimit(nodes, limit);
   }
 }
 
 /** Parse a Netch config JSON. */
-export function explodeNetchConf(content: string, nodes: Proxy[]): void {
+export function explodeNetchConf(content: string, nodes: Proxy[], limit: number = MAX_NODES): void {
   let json: any;
   try {
     json = JSON.parse(content);
@@ -1886,5 +1939,6 @@ export function explodeNetchConf(content: string, nodes: Proxy[]): void {
     node.id = index;
     nodes.push(node);
     index += 1;
+    assertNodeLimit(nodes, limit);
   }
 }

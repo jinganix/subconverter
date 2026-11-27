@@ -28,15 +28,15 @@ Modules:
 - [`types/tribool`](#subconvertercore-typestribool): `parseTriBool`, `triBoolOr`, `TriBool`
 - [`utils/base64`](#subconvertercore-utilsbase64): `base64Decode`, `base64Encode`, `tryBase64Decode`, `urlSafeBase64Decode`, `urlSafeBase64Encode`, `utf8Decode`, `utf8Encode`
 - [`utils/ini`](#subconvertercore-utilsini): `findSection`, `getSectionItems`, `parseIni`, `parseRawIni`, `renderRawIni`, `setRawSection`, `IniDocument`, `IniSection`, `RawIniSection`
-- [`utils/string`](#subconvertercore-utilsstring): `countOccurrences`, `isBlank`, `isIp`, `isIpv4`, `isIpv6`, `pad2`, `regMatch`, `regReplace`, `replaceAllDistinct`, `split`, `startsWith`, `strFind`, `stripBom`, `toBool`, `toInt`, `trim`, `trimLowerCase`
+- [`utils/string`](#subconvertercore-utilsstring): `countOccurrences`, `isBlank`, `isIp`, `isIpv4`, `isIpv6`, `isUnsafeRegexPattern`, `pad2`, `regMatch`, `regReplace`, `replaceAllDistinct`, `split`, `startsWith`, `strFind`, `stripBom`, `toBool`, `toInt`, `trim`, `trimLowerCase`
 - [`utils/url`](#subconvertercore-utilsurl): `getAllUrlArgs`, `getFirstUrlArg`, `getUrlArg`, `normalizeQueryKey`, `splitUrl`, `stripScheme`, `urlDecode`, `urlEncode`
 - [`utils/hash`](#subconvertercore-utilshash): `fnv1a64`, `fnv1a64Hex`
 - [`utils/template`](#subconvertercore-utilstemplate): `hasTemplatePlaceholders`, `renderTemplate`, `templateVariableNames`, `TemplateVars`
 - [`settings/config`](#subconvertercore-settingsconfig): `RULESET_TYPE_PREFIXES`, `parseCustomProxyGroup`, `parseExternalConfig`, `parseGroupTimes`, `parseRegexMatch`, `parseRulesetConfig`, `parseRulesetSource`, `ExternalConfig`
-- [`settings/request-params`](#subconvertercore-settingsrequest-params): `createRequestSettings`, `parseRequestSettings`, `queryBoolFlag`, `resolveNewFieldName`
+- [`settings/request-params`](#subconvertercore-settingsrequest-params): `MAX_NODES`, `MAX_REQUEST_LIST_CHARS`, `MAX_REQUEST_LIST_ENTRIES`, `TARGETS`, `createRequestSettings`, `isAffirmative`, `parseRequestSettings`, `queryBoolFlag`, `resolveNewFieldName`
 - [`userinfo`](#subconvertercore-userinfo): `convertUserinfo`, `formatSubscriptionUserinfo`, `inferUserinfoProviderFromUrl`, `nextMonthlyResetTimestamp`, `normalizeUserinfoProvider`, `parseJmsUserinfo`, `parseSubscriptionUserinfo`, `UserinfoData`, `UserinfoProvider`
 - [`parser/ciphers`](#subconvertercore-parserciphers): `SS_CIPHERS`, `SSR_CIPHERS`, `isFlattenableSsr`, `isSsCipher`
-- [`parser/construct`](#subconvertercore-parserconstruct): `anyTlsConstruct`, `httpConstruct`, `hysteria2Construct`, `hysteriaConstruct`, `snellConstruct`, `socksConstruct`, `ssConstruct`, `ssrConstruct`, `trojanConstruct`, `tuicConstruct`, `vlessConstruct`, `vmessConstruct`, `wireGuardConstruct`
+- [`parser/construct`](#subconvertercore-parserconstruct): `anyTlsConstruct`, `httpConstruct`, `hysteria2Construct`, `hysteriaConstruct`, `sanitizeProxy`, `snellConstruct`, `socksConstruct`, `ssConstruct`, `ssrConstruct`, `trojanConstruct`, `tuicConstruct`, `vlessConstruct`, `vmessConstruct`, `wireGuardConstruct`
 - [`parser/netch`](#subconvertercore-parsernetch): `explodeNetch`
 - [`parser/subscription`](#subconvertercore-parsersubscription): `explodeSub`, `explode`, `parseLink`, `parseSubscription`
 - [`parser/conf`](#subconvertercore-parserconf): `explodeClash`, `explodeNetchConf`, `explodeSsAndroid`, `explodeSsConf`, `explodeSsrConf`, `explodeSstap`, `explodeSurge`, `explodeVmessConf`, `parseClashText`, `parseConfContent`, `parsePeers`
@@ -721,6 +721,31 @@ function isIpv4(input: string): boolean;
 function isIpv6(input: string): boolean;
 ```
 
+#### `isUnsafeRegexPattern` (function)
+
+> `true` when a user-supplied regex pattern risks catastrophic backtracking:
+> over the length cap, containing nested quantifiers, or piling up too many
+> quantified atoms. Callers should reject such patterns instead of compiling
+> them.
+>
+> Detects nested quantifiers with a linear stack scan instead of a regex:
+> a group `(`...`)` that is itself quantified (`*`/`+`/`?`/`{` follows the
+> closing paren) and contains a quantified token inside (e.g. `((a+))+`
+> defeats `[^)]*`-based guards because the inner `)` breaks the match).
+> Consecutive quantifiers from the legacy guard (`++`, `*+`, `+*`) are
+> rejected too; lazy forms (`+?`, `*?`, `??`) stay allowed. Escapes and
+> character classes are skipped so literals like `\+` or `[+]` stay safe.
+>
+> Sequential quantified atoms (`a*a*a*...`) are budgeted: more than two
+> unescaped/unclassed `*`/`+`/`?`/`{` (group quantifiers included) is unsafe.
+> The budget keeps common filters (`\d+`, `(ab)+`, `香港|HK`) working
+> while blocking partition explosions (`a*` x 25 vs `a` x 30, `a*a*a*b`
+> on `a` x 20000 which is O(n^3) with three atoms).
+
+```ts
+function isUnsafeRegexPattern(pattern: string): boolean;
+```
+
 #### `pad2` (function)
 
 > Pad a value to two digits.
@@ -1061,12 +1086,63 @@ Members:
 
 Source: [`./src/settings/request-params.ts`](../packages/core/src/settings/request-params.ts)
 
+#### `MAX_NODES` (const)
+
+> Cap parsed proxy nodes per conversion (DoS mitigation, shared with the
+> server/CLI). Parsers abort in-parse once `nodes.length` exceeds this so a
+> 5MB (~125k-link) body cannot build a full `Proxy[]` before throwing.
+> TODO: have node (`convert.ts`) and CLI import this instead of owning a
+> duplicate `MAX_NODES` constant.
+
+```ts
+const MAX_NODES = 3000;
+```
+
+#### `MAX_REQUEST_LIST_CHARS` (const)
+
+> Cap for the combined characters of a repeatable filter/rule list.
+
+```ts
+const MAX_REQUEST_LIST_CHARS = 2000;
+```
+
+#### `MAX_REQUEST_LIST_ENTRIES` (const)
+
+> Cap for repeatable filter/rule lists (`include`/`rename`/…); mirrors the
+> server-side `MAX_RULESETS` guard so one request cannot force millions of
+> per-node regex evaluations for everyone else.
+
+```ts
+const MAX_REQUEST_LIST_ENTRIES = 50;
+```
+
+#### `TARGETS` (const)
+
+> Every known target format name (including `auto`, the server default).
+
+```ts
+const TARGETS = new Set<string>(Object.values(TargetFormat));
+```
+
 #### `createRequestSettings` (function)
 
 > Base `RequestSettings` with subconverter's defaults.
 
 ```ts
 function createRequestSettings(): RequestSettings;
+```
+
+#### `isAffirmative` (function)
+
+> `true` for the documented affirmative literals (`true`/`1`/`yes`/`on`,
+> plus a bare `?flag`). Shared by `boolArg` and `queryBoolFlag` so every
+> boolean switch accepts the same values the README documents.
+>
+> Exported so the CLI reuses the exact same accepted literals instead of
+> maintaining a divergent copy.
+
+```ts
+function isAffirmative(value: string): boolean;
 ```
 
 #### `parseRequestSettings` (function)
@@ -1314,6 +1390,26 @@ function hysteria2Construct(node: Proxy, options: Hysteria2Options): void;
 function hysteriaConstruct(node: Proxy, options: HysteriaOptions): void;
 ```
 
+#### `sanitizeProxy` (function)
+
+> Strip CR/LF from every string field of a node (in place; string arrays
+> are replaced with cleaned copies so shared references stay untouched).
+>
+> Subscription content is attacker-controlled: a field like
+> `server:"1.1.1.1\nHACK=evil"` would otherwise inject extra lines into the
+> line-oriented INI generators (Surge/QuanX/Quan/Loon/Mellow), while Clash
+> YAML is safe by construction. Centralized here so no generator keeps its
+> own copy; each INI generator applies it to its working copy of the node.
+>
+> Every string interpolated into `, k=v` INI lines folds `,` and `=` too —
+> otherwise `username:"a, password=hacked"` injects a CSV column (`,`) or a
+> bogus key (`=`). Only `remark` is exempt: it keeps its own `=`→`-` and
+> `,`-quoting in `processRemark`, which folding here would break.
+
+```ts
+function sanitizeProxy(node: Proxy): void;
+```
+
 #### `snellConstruct` (function)
 
 > Build a Snell node. Mirrors `snellConstruct`.
@@ -1406,9 +1502,12 @@ Source: [`./src/parser/subscription.ts`](../packages/core/src/parser/subscriptio
 
 > Parse a subscription body: SSD, Clash YAML, Surge INI, or a newline/space
 > delimited base64 list of links. Mirrors `explodeSub`.
+>
+> Threads `limit` to every parser so a 5MB (~125k-link) body aborts in-parse
+> instead of building a full `Proxy[]` before the cap is enforced.
 
 ```ts
-function explodeSub(sub: string, nodes: Proxy[]): void;
+function explodeSub(sub: string, nodes: Proxy[], limit: number = MAX_NODES): void;
 ```
 
 #### `explode` (function)
@@ -1433,9 +1532,11 @@ function parseLink(link: string): Proxy | undefined;
 >
 > `groupId` tags every parsed node, mirroring upstream: nodes from the Nth
 > `url` get group id N so `!!GROUPID=`/`!!INSERT=` rules can target one source.
+> `limit` caps the parsed nodes (default `MAX_NODES`); exceeding it throws a
+> `statusCode: 400` error in-parse instead of after a full `Proxy[]` build.
 
 ```ts
-function parseSubscription(content: string, groupId = 0): Proxy[];
+function parseSubscription(content: string, groupId = 0, limit: number = MAX_NODES): Proxy[];
 ```
 
 ### @subconverter/core: parser/conf
@@ -1445,9 +1546,12 @@ Source: [`./src/parser/conf.ts`](../packages/core/src/parser/conf.ts)
 #### `explodeClash` (function)
 
 > Parse a Clash `proxies:` list into normalized nodes.
+>
+> Aborts in-parse once `nodes.length` exceeds `limit` so a hostile body
+> cannot force a full 125k-element `Proxy[]` before the cap is enforced.
 
 ```ts
-function explodeClash(root: any, nodes: Proxy[]): void;
+function explodeClash(root: any, nodes: Proxy[], limit: number = MAX_NODES): void;
 ```
 
 #### `explodeNetchConf` (function)
@@ -1455,7 +1559,7 @@ function explodeClash(root: any, nodes: Proxy[]): void;
 > Parse a Netch config JSON.
 
 ```ts
-function explodeNetchConf(content: string, nodes: Proxy[]): void;
+function explodeNetchConf(content: string, nodes: Proxy[], limit: number = MAX_NODES): void;
 ```
 
 #### `explodeSsAndroid` (function)
@@ -1463,7 +1567,7 @@ function explodeNetchConf(content: string, nodes: Proxy[]): void;
 > Parse a Shadowsocks Android (`com.github.shadowsocks`) node array.
 
 ```ts
-function explodeSsAndroid(content: string, nodes: Proxy[]): void;
+function explodeSsAndroid(content: string, nodes: Proxy[], limit: number = MAX_NODES): void;
 ```
 
 #### `explodeSsConf` (function)
@@ -1471,7 +1575,7 @@ function explodeSsAndroid(content: string, nodes: Proxy[]): void;
 > Parse a Shadowsocks Android (`ssconf`) JSON config.
 
 ```ts
-function explodeSsConf(content: string, nodes: Proxy[]): void;
+function explodeSsConf(content: string, nodes: Proxy[], limit: number = MAX_NODES): void;
 ```
 
 #### `explodeSsrConf` (function)
@@ -1479,7 +1583,7 @@ function explodeSsConf(content: string, nodes: Proxy[]): void;
 > Parse a ShadowsocksR config JSON.
 
 ```ts
-function explodeSsrConf(content: string, nodes: Proxy[]): void;
+function explodeSsrConf(content: string, nodes: Proxy[], limit: number = MAX_NODES): void;
 ```
 
 #### `explodeSstap` (function)
@@ -1487,15 +1591,15 @@ function explodeSsrConf(content: string, nodes: Proxy[]): void;
 > Parse an SSTap config JSON.
 
 ```ts
-function explodeSstap(content: string, nodes: Proxy[]): void;
+function explodeSstap(content: string, nodes: Proxy[], limit: number = MAX_NODES): void;
 ```
 
 #### `explodeSurge` (function)
 
-> Parse a Surge/Loon `[Proxy]` configuration into nodes.
+> Parse a Surge/Loon `[Proxy]` section. Aborts in-parse over `limit` (DoS guard).
 
 ```ts
-function explodeSurge(surge: string, nodes: Proxy[]): boolean;
+function explodeSurge(surge: string, nodes: Proxy[], limit: number = MAX_NODES): boolean;
 ```
 
 #### `explodeVmessConf` (function)
@@ -1503,7 +1607,7 @@ function explodeSurge(surge: string, nodes: Proxy[]): boolean;
 > Parse a v2rayN config JSON.
 
 ```ts
-function explodeVmessConf(content: string, nodes: Proxy[]): void;
+function explodeVmessConf(content: string, nodes: Proxy[], limit: number = MAX_NODES): void;
 ```
 
 #### `parseClashText` (function)
@@ -1511,15 +1615,17 @@ function explodeVmessConf(content: string, nodes: Proxy[]): void;
 > Parse a Clash/plain YAML string into nodes (returns count).
 
 ```ts
-function parseClashText(content: string, nodes: Proxy[]): boolean;
+function parseClashText(content: string, nodes: Proxy[], limit: number = MAX_NODES): boolean;
 ```
 
 #### `parseConfContent` (function)
 
 > Parse an ss/ssr/v2ray configuration JSON blob (single or list).
+> Threads `limit` to every `explode*` so the cap aborts in-parse instead of
+> after a full `Proxy[]` is built.
 
 ```ts
-function parseConfContent(content: string, nodes: Proxy[]): boolean;
+function parseConfContent(content: string, nodes: Proxy[], limit: number = MAX_NODES): boolean;
 ```
 
 #### `parsePeers` (function)
@@ -1625,9 +1731,12 @@ function explodeSs(ss: string, node: Proxy): void;
 #### `explodeSsd` (function)
 
 > Parse an `ssd://` (ShadowsocksD) subscription.
+>
+> Aborts in-parse once `nodes.length` exceeds `limit` so a hostile body
+> cannot force a full 125k-element `Proxy[]` before the cap is enforced.
 
 ```ts
-function explodeSsd(link: string, nodes: Proxy[]): void;
+function explodeSsd(link: string, nodes: Proxy[], limit: number = MAX_NODES): void;
 ```
 
 #### `explodeSsr` (function)
@@ -2454,9 +2563,21 @@ function preprocessNodes(nodes: Proxy[], options: PreprocessOptions): void;
 #### `processRemark` (function)
 
 > Normalize a remark for output: `=`→`-`, optional CSV quoting, de-duplication.
+>
+> Pure lookup: the returned name is NOT recorded. Callers add it to `seen`
+> (and `remarksList`) only after the node builds successfully, so skipped
+> nodes leave no gap (`dup`, `dup 3`). `counts` keeps the next suffix per
+> base remark so repeats resolve in amortized O(1) instead of re-scanning
+> from 2 on every duplicate.
 
 ```ts
-function processRemark(remark: string, remarksList: string[], procComma = true): string;
+function processRemark(
+  remark: string,
+  remarksList: string[],
+  procComma = true,
+  seen?: Set<string>,
+  counts?: Map<string, number>,
+): string;
 ```
 
 #### `removeEmoji` (function)
@@ -2517,10 +2638,10 @@ Builds from: [`packages/node/src/index.ts`](../packages/node/src/index.ts).
 Modules:
 
 - [`fetch`](#subconverternode-fetch): `MAX_FETCH_BYTES`, `fetchSubscription`, `loadNodes`, `readCappedText`, `readSubscriptionFile`, `resolveSubscription`, `writeOutputFile`, `LoadOptions`, `SubscriptionSource`
-- [`ruleset-load`](#subconverternode-ruleset-load): `clearDefaultRulesetCache`, `collectRulesets`, `detectRulesetType`, `getCachedDefaultRulesets`, `loadRuleset`
-- [`convert`](#subconverternode-convert): `buildCountryResolver`, `collectNodes`, `defaultRequestSettings`, `prepareConversion`, `ConvertInput`, `ConvertRequest`
+- [`ruleset-load`](#subconverternode-ruleset-load): `clearDefaultRulesetCache`, `collectRulesets`, `detectRulesetType`, `getCachedDefaultRulesets`, `loadRuleset`, `CollectRulesetsOptions`
+- [`convert`](#subconverternode-convert): `MAX_NODES`, `buildCountryResolver`, `collectNodes`, `defaultRequestSettings`, `prepareConversion`, `ConvertInput`, `ConvertRequest`
 - [`geoip`](#subconverternode-geoip): `clearGeoIpCache`, `countryResolverFrom`, `getGeoIpDatabase`, `isHostIp`, `openGeoIpDatabase`, `resolveNodeCountries`, `GeoIpDatabase`, `ResolveCountryOptions`
-- [`server`](#subconverternode-server): `collectRequestUrls`, `contentTypeForTarget`, `convertSubRequest`, `createSubServer`, `fetchSubscriptionDetailed`, `fetchUserinfoHeader`, `splitSubscriptionUrls`, `startServer`, `ServeOptions`, `SubConversion`
+- [`server`](#subconverternode-server): `collectRequestUrls`, `contentTypeForTarget`, `convertSubRequest`, `createSubServer`, `fetchSubscriptionDetailed`, `fetchUserinfoHeader`, `MAX_FILENAME_CHARS`, `MAX_GROUPS`, `MAX_RULESET_COMBINED_CHARS`, `MAX_RULESET_FETCH_BYTES`, `MAX_RULESET_INLINE_CHARS`, `MAX_RULESETS`, `MAX_SUBSCRIPTION_HEADER_CHARS`, `MAX_SUBSCRIPTION_URLS`, `OVERALL_TIMEOUT_MS`, `splitSubscriptionUrls`, `startServer`, `ServeOptions`, `SubConversion`
 
 ### @subconverter/node: fetch
 
@@ -2547,7 +2668,11 @@ async function fetchSubscription(url: string, options: LoadOptions = {}): Promis
 > Load and parse a subscription source into proxy nodes (tagged with `groupId`).
 
 ```ts
-async function loadNodes(source: SubscriptionSource, groupId = 0): Promise<Proxy[]>;
+async function loadNodes(
+  source: SubscriptionSource,
+  groupId = 0,
+  signal?: AbortSignal,
+): Promise<Proxy[]>;
 ```
 
 #### `readCappedText` (function)
@@ -2557,7 +2682,11 @@ async function loadNodes(source: SubscriptionSource, groupId = 0): Promise<Proxy
 > enforce the same cap with the same semantics.
 
 ```ts
-async function readCappedText(response: Response, maxBytes: number): Promise<string>;
+async function readCappedText(
+  response: Response,
+  maxBytes: number,
+  signal?: AbortSignal,
+): Promise<string>;
 ```
 
 #### `readSubscriptionFile` (function)
@@ -2573,7 +2702,10 @@ async function readSubscriptionFile(path: string): Promise<string>;
 > Resolve any `SubscriptionSource` to raw text.
 
 ```ts
-async function resolveSubscription(source: SubscriptionSource): Promise<string>;
+async function resolveSubscription(
+  source: SubscriptionSource,
+  signal?: AbortSignal,
+): Promise<string>;
 ```
 
 #### `writeOutputFile` (function)
@@ -2597,6 +2729,7 @@ Members:
 - `headers` (`Record<string, string>`, optional) — Optional request headers (e.g. `User-Agent`, `Authorization`).
 - `timeoutMs` (`number`, optional) — Abort the request after this many milliseconds.
 - `maxBytes` (`number`, optional) — Abort when the response body exceeds this many bytes.
+- `signal` (`AbortSignal`, optional) — Overall-deadline signal: aborts DNS/fetch/body when the `/sub` budget expires.
 
 #### `SubscriptionSource` (type)
 
@@ -2623,12 +2756,16 @@ function clearDefaultRulesetCache(): void;
 
 #### `collectRulesets` (function)
 
-> Fetch/read every configured ruleset concurrently, skipping failures.
+> Fetch/read every configured ruleset sequentially under a combined cap,
+> skipping failures. Size-cap violations (400) are rethrown so an evil
+> ruleset cannot silently bloat the request; other fetch failures resolve
+> to empty content. Sequential (not `Promise.all`) so one request never
+> holds 20x bodies at once.
 
 ```ts
 async function collectRulesets(
   configs: RulesetConfig[],
-  options: LoadOptions = {},
+  options: CollectRulesetsOptions = {},
 ): Promise<RulesetContent[]>;
 ```
 
@@ -2645,9 +2782,10 @@ function detectRulesetType(content: string): RulesetType;
 > Resolve the bundled upstream-like remote defaults, caching the result with
 > a TTL and single-flight so concurrent conversions share one fetch batch.
 > Falls back to the bundled offline rules when fetching fails.
+> Returns a copy so callers cannot mutate the cached array or its objects.
 
 ```ts
-async function getCachedDefaultRulesets(): Promise<RulesetContent[]>;
+async function getCachedDefaultRulesets(signal?: AbortSignal): Promise<RulesetContent[]>;
 ```
 
 #### `loadRuleset` (function)
@@ -2657,13 +2795,34 @@ async function getCachedDefaultRulesets(): Promise<RulesetContent[]>;
 ```ts
 async function loadRuleset(
   config: RulesetConfig,
-  options: LoadOptions = {},
+  options: CollectRulesetsOptions = {},
 ): Promise<RulesetContent>;
 ```
+
+#### `CollectRulesetsOptions` (interface)
+
+> Options for `collectRulesets` cap overrides (tests / trusted callers).
+
+```ts
+interface CollectRulesetsOptions
+```
+
+Members:
+
+- `maxCombinedChars` (`number`, optional) — Override for `MAX_RULESET_COMBINED_CHARS`.
+- `maxInlineChars` (`number`, optional) — Override for `MAX_RULESET_INLINE_CHARS`.
 
 ### @subconverter/node: convert
 
 Source: [`./src/convert.ts`](../packages/node/src/convert.ts)
+
+#### `MAX_NODES` (const)
+
+> Cap parsed proxy nodes per conversion (DoS mitigation, shared with the server).
+
+```ts
+const MAX_NODES = 3000;
+```
 
 #### `buildCountryResolver` (function)
 
@@ -2675,6 +2834,7 @@ Source: [`./src/convert.ts`](../packages/node/src/convert.ts)
 async function buildCountryResolver(
   nodes: Proxy[],
   geoipPath: string,
+  signal?: AbortSignal,
 ): Promise<(node: Proxy) => string | undefined>;
 ```
 
@@ -2683,7 +2843,7 @@ async function buildCountryResolver(
 > Load every source and merge the resulting nodes, tagging source N with group id N.
 
 ```ts
-async function collectNodes(sources: SubscriptionSource[]): Promise<Proxy[]>;
+async function collectNodes(sources: SubscriptionSource[], signal?: AbortSignal): Promise<Proxy[]>;
 ```
 
 #### `defaultRequestSettings` (function)
@@ -2699,7 +2859,10 @@ function defaultRequestSettings(target: TargetFormat): RequestSettings;
 > Build the generation input for a `ConvertRequest`.
 
 ```ts
-async function prepareConversion(request: ConvertRequest): Promise<ConvertInput>;
+async function prepareConversion(
+  request: ConvertRequest,
+  signal?: AbortSignal,
+): Promise<ConvertInput>;
 ```
 
 #### `ConvertInput` (interface)
@@ -2823,6 +2986,9 @@ interface ResolveCountryOptions
 Members:
 
 - `lookup` (`(host: string) => Promise<string[]>`, optional) — DNS lookup override (tests). Defaults to `node:dns/promises`.
+- `concurrency` (`number`, optional) — Max concurrent DNS lookups (default 20).
+- `timeoutMs` (`number`, optional) — Per-host DNS timeout in ms (default 3000).
+- `signal` (`AbortSignal`, optional) — Overall-deadline signal: aborts pending DNS lookups when the `/sub` budget expires.
 
 ### @subconverter/node: server
 
@@ -2831,9 +2997,12 @@ Source: [`./src/server.ts`](../packages/node/src/server.ts)
 #### `collectRequestUrls` (function)
 
 > Collect every `url` value from the raw query string, splitting `|`
-> lists. Parses `rawQuery` with core `getAllUrlArgs` (not `URLSearchParams`)
-> so `+`/`%2B`/case variants decode exactly as the rest of the request
-> path does.
+> lists. Decodes first, then splits on newlines or a literal `|` only
+> before another `http(s)` URL (same as `splitSubscriptionUrls` and
+> `parseRulesetParams`), so both literal `|` and encoded `%7C`
+> separators split while `?token=a|b` stays intact. Repeatable `url=`
+> params are all collected. `+`/`%2B`/case variants decode exactly as
+> the rest of the request path does.
 
 ```ts
 function collectRequestUrls(rawQuery: string): string[];
@@ -2875,6 +3044,7 @@ function createSubServer(options: SubServerOptions = {}): Server;
 ```ts
 async function fetchSubscriptionDetailed(
   url: string,
+  signal?: AbortSignal,
 ): Promise<{ body: string; profileUpdateInterval?: string; userinfo?: string }>;
 ```
 
@@ -2887,12 +3057,75 @@ async function fetchSubscriptionDetailed(
 async function fetchUserinfoHeader(
   userinfoUrl: string,
   provider?: string,
+  signal?: AbortSignal,
 ): Promise<string | undefined>;
+```
+
+#### `MAX_FILENAME_CHARS` (const)
+
+> Cap sanitized `filename` values (oversized header mitigation).
+
+```ts
+const MAX_FILENAME_CHARS = 100;
+```
+
+#### `MAX_GROUPS` (const)
+
+```ts
+const MAX_GROUPS = 20;
+```
+
+#### `MAX_RULESET_COMBINED_CHARS` (const)
+
+```ts
+const MAX_RULESET_COMBINED_CHARS = RULESET_COMBINED_CHARS;
+```
+
+#### `MAX_RULESET_FETCH_BYTES` (const)
+
+```ts
+const MAX_RULESET_FETCH_BYTES = RULESET_FETCH_BYTES;
+```
+
+#### `MAX_RULESET_INLINE_CHARS` (const)
+
+```ts
+const MAX_RULESET_INLINE_CHARS = RULESET_INLINE_CHARS;
+```
+
+#### `MAX_RULESETS` (const)
+
+```ts
+const MAX_RULESETS = 20;
+```
+
+#### `MAX_SUBSCRIPTION_HEADER_CHARS` (const)
+
+> Cap reflected `subscription-userinfo` / `profile-update-interval` headers (header-bloat mitigation).
+
+```ts
+const MAX_SUBSCRIPTION_HEADER_CHARS = 4096;
+```
+
+#### `MAX_SUBSCRIPTION_URLS` (const)
+
+> Hard limits for the unauthenticated `/sub` endpoint (DoS mitigation).
+
+```ts
+const MAX_SUBSCRIPTION_URLS = 5;
+```
+
+#### `OVERALL_TIMEOUT_MS` (const)
+
+> Overall budget for one `/sub` conversion (sequential fetches must not hold a slot for minutes).
+
+```ts
+const OVERALL_TIMEOUT_MS = 30000;
 ```
 
 #### `splitSubscriptionUrls` (function)
 
-> Split a `url` query value into individual subscription URLs.
+> Split a decoded `url` value on newlines or `|` before another `http(s)` URL.
 
 ```ts
 function splitSubscriptionUrls(raw: string): string[];

@@ -1,12 +1,14 @@
 import { parseRegexMatch } from "./config";
-import type { RequestSettings } from "../types/settings";
+import { isBlacklistedPattern } from "../generator/nodes";
+import type { RegexMatchConfig, RequestSettings } from "../types/settings";
 import { parseClashFlavor } from "../types/settings";
 import { TargetFormat } from "../types/settings";
 import { parseTriBool, type TriBool } from "../types/tribool";
-import { toInt } from "../utils/string";
+import { isUnsafeRegexPattern, toInt } from "../utils/string";
 import { getAllUrlArgs, getFirstUrlArg, getUrlArg } from "../utils/url";
 
-const TARGETS = new Set<string>(Object.values(TargetFormat));
+/** Every known target format name (including `auto`, the server default). */
+export const TARGETS = new Set<string>(Object.values(TargetFormat));
 
 /**
  * `true` when `key` appears anywhere in the query string (`_`/`-`
@@ -21,8 +23,11 @@ function hasArg(query: string, key: string): boolean {
  * `true` for the documented affirmative literals (`true`/`1`/`yes`/`on`,
  * plus a bare `?flag`). Shared by `boolArg` and `queryBoolFlag` so every
  * boolean switch accepts the same values the README documents.
+ *
+ * Exported so the CLI reuses the exact same accepted literals instead of
+ * maintaining a divergent copy.
  */
-function isAffirmative(value: string): boolean {
+export function isAffirmative(value: string): boolean {
   const normalized = value.trim().toLowerCase();
   return (
     normalized === "" ||
@@ -46,17 +51,95 @@ function triArg(query: string, key: string): TriBool {
   return value === "" ? undefined : parseTriBool(value);
 }
 
-function listArg(query: string, key: string): string[] {
-  const value = getUrlArg(query, key);
-  return value === "" ? [] : value.split(",");
+/** `true` when a user-supplied regex must be rejected before compiling. */
+function isBlockedRegex(pattern: string): boolean {
+  return isBlacklistedPattern(pattern) || isUnsafeRegexPattern(pattern);
 }
 
-/** Repeatable comma-separated ISO country codes, normalized to uppercase. */
+/** Cap for repeatable filter/rule lists (`include`/`rename`/…); mirrors the
+ * server-side `MAX_RULESETS` guard so one request cannot force millions of
+ * per-node regex evaluations for everyone else. */
+export const MAX_REQUEST_LIST_ENTRIES = 50;
+/** Cap for the combined characters of a repeatable filter/rule list. */
+export const MAX_REQUEST_LIST_CHARS = 2000;
+/**
+ * Cap parsed proxy nodes per conversion (DoS mitigation, shared with the
+ * server/CLI). Parsers abort in-parse once `nodes.length` exceeds this so a
+ * 5MB (~125k-link) body cannot build a full `Proxy[]` before throwing.
+ * TODO: have node (`convert.ts`) and CLI import this instead of owning a
+ * duplicate `MAX_NODES` constant.
+ */
+export const MAX_NODES = 3000;
+
+function throwBadRequest(message: string): never {
+  throw Object.assign(new Error(message), { statusCode: 400 });
+}
+
+function assertListCap(entryCount: number, charCount: number, name: string): void {
+  if (entryCount > MAX_REQUEST_LIST_ENTRIES) {
+    throwBadRequest(`Too many ${name} (max ${String(MAX_REQUEST_LIST_ENTRIES)}).`);
+  }
+  if (charCount > MAX_REQUEST_LIST_CHARS) {
+    throwBadRequest(`${name} exceeds size limit (max ${String(MAX_REQUEST_LIST_CHARS)} chars).`);
+  }
+}
+
+/** Repeatable comma-separated remark filters (`?include=a&include=b,c`). */
+function listAllArg(query: string, key: string): string[] {
+  // Cap the RAW entries before dropping blocked ones: otherwise 100k
+  // blocked patterns evaluate the guards yet count as 0 and bypass the cap.
+  const rawEntries = getAllUrlArgs(query, key)
+    .flatMap((raw) => raw.split(","))
+    .map((raw) => raw.trim())
+    .filter((raw) => raw !== "");
+  assertListCap(
+    rawEntries.length,
+    rawEntries.reduce((total, entry) => total + entry.length, 0),
+    key,
+  );
+  return rawEntries.filter((raw) => !isBlockedRegex(raw));
+}
+
+/** Repeatable `match@replacement` rules (`?rename=a@b&rename=c@d`). */
+function parseRegexRules(query: string, key: string, delimiter: string): RegexMatchConfig[] {
+  // Cap the RAW parts before dropping blocked ones: otherwise 100k blocked
+  // patterns evaluate the guards yet `continue` past the cap (count stays 0).
+  const rawParts = getAllUrlArgs(query, key).flatMap((raw) =>
+    raw
+      .split("\n")
+      .map((part) => part.trim())
+      .filter((part) => part !== ""),
+  );
+  assertListCap(
+    rawParts.length,
+    rawParts.reduce((total, part) => total + part.length, 0),
+    key,
+  );
+  const rules: RegexMatchConfig[] = [];
+  let chars = 0;
+  for (const trimmed of rawParts) {
+    const rule = parseRegexMatch(trimmed, delimiter);
+    if (rule.script === "" && isBlockedRegex(rule.match)) {
+      continue;
+    }
+    rules.push(rule);
+    chars += rule.match.length + rule.replace.length;
+    assertListCap(rules.length, chars, key);
+  }
+  return rules;
+}
+
 function countryListArg(query: string, key: string): string[] {
-  return getAllUrlArgs(query, key)
+  const entries = getAllUrlArgs(query, key)
     .flatMap((raw) => raw.split(","))
     .map((raw) => raw.trim().toUpperCase())
     .filter((raw) => raw !== "");
+  assertListCap(
+    entries.length,
+    entries.reduce((total, entry) => total + entry.length, 0),
+    key,
+  );
+  return entries;
 }
 
 /**
@@ -201,8 +284,8 @@ export function parseRequestSettings(query: string): RequestSettings {
   settings.uploadPath = getUrlArg(query, "upload_path");
   settings.proxiesStyle = getUrlArg(query, "proxies_style") || "flow";
   settings.proxyGroupsStyle = getUrlArg(query, "proxy_groups_style") || "flow";
-  settings.includeRemarks = listArg(query, "include");
-  settings.excludeRemarks = listArg(query, "exclude");
+  settings.includeRemarks = listAllArg(query, "include");
+  settings.excludeRemarks = listAllArg(query, "exclude");
   settings.includeCountries = countryListArg(query, "include_country");
   settings.excludeCountries = countryListArg(query, "exclude_country");
   settings.userinfoUrl = getFirstUrlArg(query, "userinfo_url", "userinfo-url", "userinfo");
@@ -213,24 +296,22 @@ export function parseRequestSettings(query: string): RequestSettings {
     "userinfo_type",
     "userinfo-type",
   );
-  const renameRaw = getUrlArg(query, "rename");
-  if (renameRaw !== "") {
-    settings.rename = [parseRegexMatch(renameRaw, "@")];
-  }
+  settings.rename = parseRegexRules(query, "rename", "@");
   // `name_regex` accepts the same `match@replacement` form as `rename` and may
   // be repeated; `name_remove` takes a comma-separated list of literals.
-  settings.nameRegex = getAllUrlArgs(query, "name_regex")
-    .flatMap((raw) => raw.split("\n"))
-    .map((raw) => raw.trim())
-    .filter((raw) => raw !== "")
-    .map((raw) => parseRegexMatch(raw, "@"));
-  settings.nameRemove = getAllUrlArgs(query, "name_remove")
-    .flatMap((raw) => raw.split(","))
-    .map((raw) => raw.trim())
-    .filter((raw) => raw !== "");
-  const emojiRaw = getUrlArg(query, "emoji");
-  if (emojiRaw !== "") {
-    settings.emoji = [parseRegexMatch(emojiRaw, ",")];
-  }
+  settings.nameRegex = parseRegexRules(query, "name_regex", "@");
+  settings.nameRemove = (() => {
+    const entries = getAllUrlArgs(query, "name_remove")
+      .flatMap((raw) => raw.split(","))
+      .map((raw) => raw.trim())
+      .filter((raw) => raw !== "");
+    assertListCap(
+      entries.length,
+      entries.reduce((total, entry) => total + entry.length, 0),
+      "name_remove",
+    );
+    return entries;
+  })();
+  settings.emoji = parseRegexRules(query, "emoji", ",");
   return settings;
 }

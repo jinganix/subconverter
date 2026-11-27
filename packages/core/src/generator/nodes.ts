@@ -2,21 +2,47 @@ import type { Proxy } from "../types/proxy";
 import { ProxyType } from "../types/proxy";
 import type { RegexMatchConfig } from "../types/settings";
 import { formatCountryRemark, hasRegionName, normalizeCountryCode } from "../utils/country";
+import { isUnsafeRegexPattern } from "../utils/string";
 
 /** Compiled remark/matcher regexes; rules repeat per node so cache them. */
 const regexCache = new Map<string, RegExp | undefined>();
+
+/** Cap for the regex/range caches so repeatable params cannot grow them without bound. */
+const MAX_CACHE_ENTRIES = 500;
+
+/** Insert into a bounded cache, evicting the oldest entry when full. */
+function cacheSet<K, V>(cache: Map<K, V>, key: K, value: V): void {
+  if (cache.has(key)) {
+    cache.delete(key);
+  } else if (cache.size >= MAX_CACHE_ENTRIES) {
+    const oldest = cache.keys().next();
+    if (!oldest.done) {
+      cache.delete(oldest.value);
+    }
+  }
+  cache.set(key, value);
+}
+
+/** `true` when a user-supplied pattern must never reach the regex engine. */
+function isBlockedPattern(pattern: string): boolean {
+  return isBlacklistedPattern(pattern) || isUnsafeRegexPattern(pattern);
+}
 
 function cachedRegex(pattern: string): RegExp | undefined {
   const cached = regexCache.get(pattern);
   if (cached !== undefined) {
     return cached;
   }
+  if (regexCache.has(pattern) || isBlockedPattern(pattern)) {
+    cacheSet(regexCache, pattern, undefined);
+    return undefined;
+  }
   try {
     const compiled = new RegExp(pattern);
-    regexCache.set(pattern, compiled);
+    cacheSet(regexCache, pattern, compiled);
     return compiled;
   } catch {
-    regexCache.set(pattern, undefined);
+    cacheSet(regexCache, pattern, undefined);
     return undefined;
   }
 }
@@ -49,6 +75,10 @@ function regReplace(value: string, pattern: string, replacement: string): string
   const key = `g \u0000 ${pattern} `;
   let compiled = regexCache.get(key);
   if (compiled === undefined && !regexCache.has(key)) {
+    if (isBlockedPattern(pattern)) {
+      cacheSet(regexCache, key, undefined);
+      return value;
+    }
     try {
       compiled = new RegExp(pattern, "g");
     } catch {
@@ -56,7 +86,7 @@ function regReplace(value: string, pattern: string, replacement: string): string
       // conversion (rename/emoji rules come from configs and query params).
       compiled = undefined;
     }
-    regexCache.set(key, compiled);
+    cacheSet(regexCache, key, compiled);
   }
   if (!compiled) {
     return value;
@@ -135,6 +165,12 @@ export function matchRange(range: string, target: number): boolean {
     }
   }
   rangeCache.set(cacheKey, match);
+  if (rangeCache.size > MAX_CACHE_ENTRIES) {
+    const oldest = rangeCache.keys().next();
+    if (!oldest.done) {
+      rangeCache.delete(oldest.value);
+    }
+  }
   return match;
 }
 
@@ -239,8 +275,22 @@ export function filterNodes(
   nodes.push(...kept);
 }
 
-/** Normalize a remark for output: `=`→`-`, optional CSV quoting, de-duplication. */
-export function processRemark(remark: string, remarksList: string[], procComma = true): string {
+/**
+ * Normalize a remark for output: `=`→`-`, optional CSV quoting, de-duplication.
+ *
+ * Pure lookup: the returned name is NOT recorded. Callers add it to `seen`
+ * (and `remarksList`) only after the node builds successfully, so skipped
+ * nodes leave no gap (`dup`, `dup 3`). `counts` keeps the next suffix per
+ * base remark so repeats resolve in amortized O(1) instead of re-scanning
+ * from 2 on every duplicate.
+ */
+export function processRemark(
+  remark: string,
+  remarksList: string[],
+  procComma = true,
+  seen?: Set<string>,
+  counts?: Map<string, number>,
+): string {
   // `=` breaks the `name = value` split of every Surge-family format, and a
   // line break would end the line early (injecting config lines).
   let result = remark.replace(/=/g, "-").replace(/[\r\n]+/g, " ");
@@ -249,12 +299,24 @@ export function processRemark(remark: string, remarksList: string[], procComma =
     // the name early and swallow the value.
     result = `"${result.replace(/"/g, "'")}"`;
   }
-  let tempRemark = result;
-  let count = 2;
-  while (remarksList.includes(tempRemark)) {
-    tempRemark = `${result} ${count}`;
-    count += 1;
+  // Generators pass a persistent `seen` set so deduplication stays O(1)
+  // per node; without it fall back to a one-off set (fine for single calls).
+  const lookup = seen ?? new Set(remarksList);
+  if (!lookup.has(result)) {
+    return result;
   }
+  // Resume from the last suffix used for this base: every `while` step lands
+  // on a consumed name, so total steps stay linear (amortized O(1) per call).
+  // The found suffix itself is stored — not `count + 1` — so a lookup the
+  // caller discards (skipped node) is returned again instead of leaking a
+  // gap (`dup`, `dup 3`).
+  let count = counts?.get(result) ?? 2;
+  let tempRemark = `${result} ${count}`;
+  while (lookup.has(tempRemark)) {
+    count += 1;
+    tempRemark = `${result} ${count}`;
+  }
+  counts?.set(result, count);
   return tempRemark;
 }
 
@@ -269,14 +331,12 @@ export function groupGenerate(
     filteredNodeList.push(rule.slice(2));
     return;
   }
+  const seen = new Set(filteredNodeList);
   for (const node of nodeList) {
     const { matched, realRule } = applyMatcher(rule, node);
-    if (
-      matched &&
-      (realRule === "" || regFind(node.remark, realRule)) &&
-      !filteredNodeList.includes(node.remark)
-    ) {
+    if (matched && (realRule === "" || regFind(node.remark, realRule)) && !seen.has(node.remark)) {
       filteredNodeList.push(node.remark);
+      seen.add(node.remark);
     }
   }
 }
@@ -493,9 +553,14 @@ export function dedupeNodes(nodes: Proxy[]): number {
   const seen = new Set<string>();
   const kept: Proxy[] = [];
   for (const node of nodes) {
-    // Credentials are part of the key: two nodes on the same server/port
-    // with different passwords or user ids are distinct subscriptions.
-    const key = `${node.type}\u0000${node.hostname}\u0000${node.port}\u0000${node.remark}\u0000${node.encryptMethod}\u0000${node.password}\u0000${node.userId}\u0000${node.username}`;
+    // Credentials and transport details are part of the key: two nodes on
+    // the same server/port with different passwords, user ids, paths,
+    // plugin settings, TLS identities, WireGuard keys, Hysteria speeds,
+    // or port lists are distinct subscriptions (e.g. `simple-obfs` vs plain
+    // SS, or WireGuard `pk1` vs `pk2`, must not collapse).
+    // Every connection-affecting Proxy field (except id/groupId) participates
+    // so WireGuard PSKs (`PSK1` vs `PSK2`) and similar variants stay distinct.
+    const key = `${node.type}\u0000${node.hostname}\u0000${node.port}\u0000${node.remark}\u0000${node.encryptMethod}\u0000${node.password}\u0000${node.userId}\u0000${node.username}\u0000${node.host}\u0000${node.path}\u0000${node.transferProtocol}\u0000${node.obfs}\u0000${node.protocol}\u0000${node.sni}\u0000${node.flow}\u0000${node.plugin}\u0000${node.pluginOption}\u0000${node.alterId}\u0000${node.tlsSecure}\u0000${node.serverName}\u0000${node.fingerprint}\u0000${(node.alpn ?? []).join(",")}\u0000${node.ports}\u0000${node.authStr}\u0000${node.obfsParam}\u0000${node.protocolParam}\u0000${node.edge}\u0000${node.publicKey}\u0000${node.shortId}\u0000${node.privateKey}\u0000${node.selfIp}\u0000${node.selfIpv6}\u0000${node.preSharedKey}\u0000${(node.dnsServers ?? []).join(",")}\u0000${node.mtu}\u0000${node.keepAlive}\u0000${node.testUrl}\u0000${node.clientId}\u0000${node.allowedIps}\u0000${node.ca}\u0000${node.caStr}\u0000${node.up}\u0000${node.down}\u0000${node.upSpeed}\u0000${node.downSpeed}\u0000${node.recvWindowConn}\u0000${node.recvWindow}\u0000${node.disableMtuDiscovery}\u0000${node.hopInterval}\u0000${node.cwnd}\u0000${node.snellVersion}\u0000${node.congestionControl}\u0000${node.fakeType}\u0000${node.quicSecure}\u0000${node.quicSecret}\u0000${node.udp}\u0000${node.tcpFastOpen}\u0000${node.allowInsecure}\u0000${node.tls13}\u0000${node.underlyingProxy}`;
     if (seen.has(key)) {
       continue;
     }

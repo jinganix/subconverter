@@ -561,6 +561,8 @@ export function buildClash(
   const proxies: ClashProxy[] = [];
   const nodeList: Proxy[] = [];
   const remarksList: string[] = [];
+  const seenRemarks = new Set<string>();
+  const remarkCounts = new Map<string, number>();
 
   for (const src of nodes) {
     // Work on a copy so the caller's nodes keep their remarks intact.
@@ -569,7 +571,7 @@ export function buildClash(
     if (settings.appendProxyType) {
       x.remark = `[${type}] ${x.remark}`;
     }
-    const remark = processRemark(x.remark, remarksList, false);
+    const remark = processRemark(x.remark, remarksList, false, seenRemarks, remarkCounts);
     x.remark = remark;
 
     const skipCertVerify =
@@ -581,6 +583,7 @@ export function buildClash(
     }
     proxies.push(built);
     remarksList.push(remark);
+    seenRemarks.add(remark);
     nodeList.push(x);
   }
 

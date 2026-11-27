@@ -4,6 +4,36 @@ import type { TriBool } from "../types/tribool";
 import { base64Decode } from "../utils/base64";
 import { isIpv4, isIpv6, toInt, trim } from "../utils/string";
 
+/**
+ * Strip CR/LF from every string field of a node (in place; string arrays
+ * are replaced with cleaned copies so shared references stay untouched).
+ *
+ * Subscription content is attacker-controlled: a field like
+ * `server:"1.1.1.1\nHACK=evil"` would otherwise inject extra lines into the
+ * line-oriented INI generators (Surge/QuanX/Quan/Loon/Mellow), while Clash
+ * YAML is safe by construction. Centralized here so no generator keeps its
+ * own copy; each INI generator applies it to its working copy of the node.
+ *
+ * Every string interpolated into `, k=v` INI lines folds `,` and `=` too —
+ * otherwise `username:"a, password=hacked"` injects a CSV column (`,`) or a
+ * bogus key (`=`). Only `remark` is exempt: it keeps its own `=`→`-` and
+ * `,`-quoting in `processRemark`, which folding here would break.
+ */
+export function sanitizeProxy(node: Proxy): void {
+  const record = node as unknown as Record<string, unknown>;
+  for (const key of Object.keys(record)) {
+    const value = record[key];
+    if (typeof value === "string") {
+      record[key] =
+        key === "remark" ? value.replace(/[\r\n]+/g, " ") : value.replace(/[\r\n,=]+/g, " ");
+    } else if (Array.isArray(value)) {
+      record[key] = value.map((item) =>
+        typeof item === "string" ? item.replace(/[\r\n,=]+/g, " ") : item,
+      );
+    }
+  }
+}
+
 function commonConstruct(
   node: Proxy,
   type: ProxyType,

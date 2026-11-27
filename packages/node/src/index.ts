@@ -16,9 +16,11 @@ export {
   detectRulesetType,
   getCachedDefaultRulesets,
   loadRuleset,
+  type CollectRulesetsOptions,
 } from "./ruleset-load";
 
 export {
+  MAX_NODES,
   buildCountryResolver,
   collectNodes,
   defaultRequestSettings,
@@ -47,6 +49,15 @@ export {
   createSubServer,
   fetchSubscriptionDetailed,
   fetchUserinfoHeader,
+  MAX_FILENAME_CHARS,
+  MAX_GROUPS,
+  MAX_RULESET_COMBINED_CHARS,
+  MAX_RULESET_FETCH_BYTES,
+  MAX_RULESET_INLINE_CHARS,
+  MAX_RULESETS,
+  MAX_SUBSCRIPTION_HEADER_CHARS,
+  MAX_SUBSCRIPTION_URLS,
+  OVERALL_TIMEOUT_MS,
   splitSubscriptionUrls,
   startServer,
   type ServeOptions,

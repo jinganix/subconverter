@@ -18,10 +18,11 @@ import {
   explodeWireguard,
   isLink,
 } from "./uri";
+import { MAX_NODES } from "../settings/request-params";
 import type { Proxy } from "../types/proxy";
 import { ProxyType, createProxy } from "../types/proxy";
-import { urlSafeBase64Decode } from "../utils/base64";
-import { countOccurrences, startsWith, stripBom } from "../utils/string";
+import { tryBase64Decode } from "../utils/base64";
+import { startsWith, stripBom } from "../utils/string";
 
 /** Parse a single proxy link into `node`. */
 export function explode(link: string, node: Proxy): void {
@@ -69,25 +70,35 @@ export function parseLink(link: string): Proxy | undefined {
   return node.type === ProxyType.Unknown ? undefined : node;
 }
 
+/** Throw a 400 once the in-parse node cap is exceeded (DoS guard). */
+function throwTooManyNodes(limit: number): never {
+  throw Object.assign(new Error(`Too many proxy nodes (max ${String(limit)}).`), {
+    statusCode: 400,
+  });
+}
+
 /**
  * Parse a subscription body: SSD, Clash YAML, Surge INI, or a newline/space
  * delimited base64 list of links. Mirrors `explodeSub`.
+ *
+ * Threads `limit` to every parser so a 5MB (~125k-link) body aborts in-parse
+ * instead of building a full `Proxy[]` before the cap is enforced.
  */
-export function explodeSub(sub: string, nodes: Proxy[]): void {
+export function explodeSub(sub: string, nodes: Proxy[], limit: number = MAX_NODES): void {
   let processed = false;
 
   if (startsWith(sub, "ssd://")) {
-    explodeSsd(sub, nodes);
+    explodeSsd(sub, nodes, limit);
     processed = true;
   }
 
   if (!processed && /"?(Proxy|proxies)"?:/.test(sub)) {
-    if (parseClashText(sub, nodes)) {
+    if (parseClashText(sub, nodes, limit)) {
       processed = true;
     }
   }
 
-  if (!processed && explodeSurge(sub, nodes)) {
+  if (!processed && explodeSurge(sub, nodes, limit)) {
     processed = true;
   }
 
@@ -95,42 +106,110 @@ export function explodeSub(sub: string, nodes: Proxy[]): void {
     return;
   }
 
-  const body = urlSafeBase64Decode(sub);
+  // Providers serve either a base64 blob or plain text; `tryBase64Decode`
+  // passes plain text through untouched, so one path handles both.
+  const body = tryBase64Decode(sub);
   if (/(vmess|shadowsocks|http|trojan)\s*?=/.test(body)) {
-    if (explodeSurge(body, nodes)) {
+    if (explodeSurge(body, nodes, limit)) {
       return;
     }
   }
-  const before = nodes.length;
-  splitLinks(body, nodes);
-  if (nodes.length === before && body !== sub) {
-    // Not a base64 body after all (e.g. a plain-text provider list).
-    splitLinks(sub, nodes);
-  }
+  splitLinks(body, nodes, limit);
 }
 
-function splitLinks(body: string, nodes: Proxy[]): void {
-  const normalized = body.replace(/\r\n/g, "\n");
-  const delimiter =
-    countOccurrences(normalized, "\n") < 1
-      ? countOccurrences(normalized, "\r") < 1
-        ? " "
-        : "\r"
-      : "\n";
-  for (const rawLink of normalized.split(delimiter)) {
-    // Providers and copy-pasted configs often indent lines; dispatch is
-    // prefix-based (`startsWith`), so untrimmed lines would silently drop.
-    const link = rawLink.replace(/\r/g, "").trim();
-    if (link === "") {
-      continue;
+/** Explicit proxy-link schemes (mirrors `explode` dispatch, lowercased). */
+const LINK_SCHEME_PREFIXES = [
+  "ssr://",
+  "vmess://",
+  "vmess1://",
+  "ss://",
+  "socks://",
+  "https://t.me/socks",
+  "tg://socks",
+  "https://t.me/http",
+  "tg://http",
+  "netch://",
+  "trojan://",
+  "vless://",
+  "tuic://",
+  "snell://",
+  "hysteria://",
+  "hysteria2://",
+  "hy2://",
+  "wg://",
+  "wireguard://",
+  "anytls://",
+  "ssd://",
+];
+
+/**
+ * `true` when a whitespace-separated token starts a new link.
+ *
+ * Only known proxy schemes split: a bare `https://example.com` inside a
+ * remark (`ss://...#my https://example.com`) must continue the remark
+ * instead of truncating it. Generic `http(s)://` starts a link only in
+ * credential form — a base64 body (`http://dXNlcjpw...`) with no dots,
+ * slashes, or other URL characters — matching what `explodeHttpSub`
+ * actually parses.
+ */
+function isLinkStart(token: string): boolean {
+  const lower = token.toLowerCase();
+  for (const prefix of LINK_SCHEME_PREFIXES) {
+    if (lower.startsWith(prefix)) {
+      return true;
     }
+  }
+  if (lower.startsWith("http://") || lower.startsWith("https://")) {
+    const after = token.slice(token.indexOf("://") + 3);
+    const body = after.split(/[?#]/, 1)[0] ?? "";
+    return body !== "" && /^[A-Za-z0-9+/_=-]+$/.test(body);
+  }
+  return false;
+}
+
+/**
+ * Split a decoded subscription body into links.
+ *
+ * Links arrive whitespace-separated (one per line, or space-separated per
+ * the README), but remarks may legally contain spaces (`ss://...#my node`), so
+ * a naive space split would truncate them while a pure line split fuses
+ * space-separated links into one broken node. Split on any whitespace, then
+ * re-join link-aware: a token with a known proxy scheme starts a new link,
+ * anything else continues the previous link's remark (stray text before the
+ * first link is dropped).
+ */
+function splitLinks(body: string, nodes: Proxy[], limit: number = MAX_NODES): void {
+  let current = "";
+  const flush = (): void => {
+    if (current === "") {
+      return;
+    }
+    // Providers and copy-pasted configs often indent lines; dispatch is
+    // prefix-based (`startsWith`), so untrimmed links would silently drop.
+    const link = current.trim();
+    current = "";
     const node = createProxy();
     explode(link, node);
     if (node.type === ProxyType.Unknown) {
-      continue;
+      return;
     }
     nodes.push(node);
+    if (nodes.length > limit) {
+      throwTooManyNodes(limit);
+    }
+  };
+  for (const token of body.split(/\s+/)) {
+    if (token === "") {
+      continue;
+    }
+    if (isLinkStart(token)) {
+      flush();
+      current = token;
+    } else if (current !== "") {
+      current += ` ${token}`;
+    }
   }
+  flush();
 }
 
 /**
@@ -138,12 +217,21 @@ function splitLinks(body: string, nodes: Proxy[]): void {
  *
  * `groupId` tags every parsed node, mirroring upstream: nodes from the Nth
  * `url` get group id N so `!!GROUPID=`/`!!INSERT=` rules can target one source.
+ * `limit` caps the parsed nodes (default `MAX_NODES`); exceeding it throws a
+ * `statusCode: 400` error in-parse instead of after a full `Proxy[]` build.
  */
-export function parseSubscription(content: string, groupId = 0): Proxy[] {
+export function parseSubscription(
+  content: string,
+  groupId = 0,
+  limit: number = MAX_NODES,
+): Proxy[] {
   const nodes: Proxy[] = [];
   const text = stripBom(content);
-  if (!parseConfContent(text, nodes)) {
-    explodeSub(text, nodes);
+  if (!parseConfContent(text, nodes, limit)) {
+    explodeSub(text, nodes, limit);
+  }
+  if (nodes.length > limit) {
+    throwTooManyNodes(limit);
   }
   for (const node of nodes) {
     node.groupId = groupId;

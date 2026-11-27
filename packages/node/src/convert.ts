@@ -15,6 +15,9 @@ import { type SubscriptionSource, loadNodes } from "./fetch";
 import { countryResolverFrom, getGeoIpDatabase, resolveNodeCountries } from "./geoip";
 import { collectRulesets, getCachedDefaultRulesets } from "./ruleset-load";
 
+/** Cap parsed proxy nodes per conversion (DoS mitigation, shared with the server). */
+export const MAX_NODES = 3000;
+
 /** A fully-resolved conversion request. */
 export interface ConvertRequest {
   sources: SubscriptionSource[];
@@ -46,16 +49,30 @@ export interface ConvertInput {
 }
 
 /** Load every source and merge the resulting nodes, tagging source N with group id N. */
-export async function collectNodes(sources: SubscriptionSource[]): Promise<Proxy[]> {
+export async function collectNodes(
+  sources: SubscriptionSource[],
+  signal?: AbortSignal,
+): Promise<Proxy[]> {
   const all: Proxy[] = [];
   for (const [index, source] of sources.entries()) {
-    all.push(...(await loadNodes(source, index)));
+    if (signal?.aborted) {
+      throw Object.assign(new Error("Request timed out"), { statusCode: 504 });
+    }
+    all.push(...(await loadNodes(source, index, signal)));
+    if (all.length > MAX_NODES) {
+      throw Object.assign(new Error(`Too many proxy nodes (max ${String(MAX_NODES)}).`), {
+        statusCode: 400,
+      });
+    }
   }
   return all;
 }
 
 /** Build the generation input for a {@link ConvertRequest}. */
-export async function prepareConversion(request: ConvertRequest): Promise<ConvertInput> {
+export async function prepareConversion(
+  request: ConvertRequest,
+  signal?: AbortSignal,
+): Promise<ConvertInput> {
   const includeRules = request.includeRules ?? true;
   const extraProxyGroup =
     includeRules !== false && (!request.extraProxyGroup || request.extraProxyGroup.length === 0)
@@ -65,13 +82,13 @@ export async function prepareConversion(request: ConvertRequest): Promise<Conver
   if (includeRules === false) {
     rulesets = [];
   } else if (request.rulesets && request.rulesets.length > 0) {
-    rulesets = await collectRulesets(request.rulesets);
+    rulesets = await collectRulesets(request.rulesets, { signal });
   } else {
     // Prefer the full upstream-like remote lists (cached with TTL), falling
     // back to the bundled offline rules when fetching fails (e.g. offline CI).
-    rulesets = await getCachedDefaultRulesets();
+    rulesets = await getCachedDefaultRulesets(signal);
   }
-  const nodes = await collectNodes(request.sources);
+  const nodes = await collectNodes(request.sources, signal);
   const settings: ExtraSettings = { ...createExtraSettings(), ...request.settings };
   const needsCountry =
     settings.autoCountry ||
@@ -83,7 +100,7 @@ export async function prepareConversion(request: ConvertRequest): Promise<Conver
         "autoCountry and country filters require a GeoIP database: pass `geoipPath` (a GeoLite2/GeoIP2 .mmdb file).",
       );
     }
-    settings.countryResolver = await buildCountryResolver(nodes, request.geoipPath);
+    settings.countryResolver = await buildCountryResolver(nodes, request.geoipPath, signal);
   }
   return {
     extraProxyGroup,
@@ -103,9 +120,16 @@ export async function prepareConversion(request: ConvertRequest): Promise<Conver
 export async function buildCountryResolver(
   nodes: Proxy[],
   geoipPath: string,
+  signal?: AbortSignal,
 ): Promise<(node: Proxy) => string | undefined> {
+  if (signal?.aborted) {
+    throw Object.assign(new Error("Request timed out"), { statusCode: 504 });
+  }
   const database = await getGeoIpDatabase(geoipPath);
-  return countryResolverFrom(await resolveNodeCountries(nodes, database));
+  if (signal?.aborted) {
+    throw Object.assign(new Error("Request timed out"), { statusCode: 504 });
+  }
+  return countryResolverFrom(await resolveNodeCountries(nodes, database, { signal }));
 }
 
 /** Default {@link RequestSettings} derived from a conversion target. */

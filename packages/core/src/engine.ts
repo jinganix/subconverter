@@ -208,7 +208,7 @@ export function toSip008(nodes: Proxy[], baseConf = ""): string {
  * valid.
  */
 function processGroupName(name: string): string {
-  const normalized = name.replace(/=/g, "-").replace(/[\r\n]+/g, " ");
+  const normalized = name.replace(/[=,]/g, "-").replace(/[\r\n]+/g, " ");
   return normalized.trim() === "" ? "group" : normalized;
 }
 

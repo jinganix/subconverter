@@ -50,6 +50,7 @@ export {
   isIp,
   isIpv4,
   isIpv6,
+  isUnsafeRegexPattern,
   pad2,
   regMatch,
   regReplace,
@@ -91,7 +92,12 @@ export {
   type ExternalConfig,
 } from "./settings/config";
 export {
+  MAX_NODES,
+  MAX_REQUEST_LIST_CHARS,
+  MAX_REQUEST_LIST_ENTRIES,
+  TARGETS,
   createRequestSettings,
+  isAffirmative,
   parseRequestSettings,
   queryBoolFlag,
   resolveNewFieldName,
@@ -114,6 +120,7 @@ export {
   httpConstruct,
   hysteria2Construct,
   hysteriaConstruct,
+  sanitizeProxy,
   snellConstruct,
   socksConstruct,
   ssConstruct,

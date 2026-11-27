@@ -412,7 +412,7 @@ describe("cli name regex and removal", () => {
         "clash",
         "--no-rules",
         "--name-regex",
-        "^abc@(.+?)\\..*$@$1",
+        "^abc@([^.]+)\\..*$@$1",
         "--rename",
         "^server@node",
       ]),
@@ -558,6 +558,49 @@ describe("cli argument parsing", () => {
     expect(stdout).not.toContain("rules:");
   });
 
+  it("rejects the auto target like the server", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#A");
+    expect(await runCli(["convert", "--file", path, "--target", "auto"])).toBe(1);
+    expect(stderr).toContain("Unknown target");
+  });
+
+  it("lists convertible formats without auto", async () => {
+    expect(await runCli(["formats"])).toBe(0);
+    expect(stdout).toContain("clash");
+    expect(stdout.split("\n").filter((line) => line.trim() === "auto")).toHaveLength(0);
+  });
+
+  it("shares core boolean literals across repeated flags", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#A");
+    stdout = "";
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "clash",
+        "--no-rules",
+        "--append-type=false",
+        "--append-type",
+      ]),
+    ).toBe(0);
+    expect(stdout).toContain("[Trojan] A");
+    stdout = "";
+    expect(
+      await runCli([
+        "convert",
+        "--file",
+        path,
+        "--target",
+        "clash",
+        "--no-rules",
+        "--append-type=false",
+      ]),
+    ).toBe(0);
+    expect(stdout).not.toContain("[Trojan]");
+  });
+
   it("fails when the GeoIP database cannot be loaded", async () => {
     const path = await writeSub("trojan://pw@1.2.3.4:443#A");
     expect(
@@ -659,6 +702,16 @@ describe("cli external config coverage", () => {
     ).toBe(1);
     expect(stderr).toContain("No proxy nodes left");
   });
+
+  it("rejects more than 3000 nodes like the server (finding 15)", async () => {
+    const links = Array.from(
+      { length: 3001 },
+      (_, index) => `trojan://pw@1.2.3.4:443#n${String(index)}`,
+    );
+    const path = await writeSub(links.join("\n"));
+    expect(await runCli(["convert", "--file", path, "--target", "clash", "--no-rules"])).toBe(1);
+    expect(stderr).toContain("Too many proxy nodes");
+  });
 });
 
 describe("cli remote sources and flag variants", () => {
@@ -732,5 +785,37 @@ describe("cli remote sources and flag variants", () => {
       0,
     );
     expect(stdout).toContain("proxies:");
+  });
+});
+
+describe("round-3 must 8: cli parity caps", () => {
+  it("rejects more than 5 inputs like the server url cap", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#A");
+    const args = ["convert", "--target", "clash", "--no-rules"];
+    for (let i = 0; i < 6; i += 1) {
+      args.push("--file", path);
+    }
+    expect(await runCli(args)).toBe(1);
+    expect(stderr).toContain("Too many inputs");
+  });
+
+  it("rejects more than 20 groups", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#A");
+    const args = ["convert", "--file", path, "--target", "clash", "--no-rules"];
+    for (let i = 0; i < 21; i += 1) {
+      args.push("--group", `G${i}`);
+    }
+    expect(await runCli(args)).toBe(1);
+    expect(stderr).toContain("Too many groups");
+  });
+
+  it("rejects more than 20 rulesets", async () => {
+    const path = await writeSub("trojan://pw@1.2.3.4:443#A");
+    const args = ["convert", "--file", path, "--target", "clash", "--no-rules"];
+    for (let i = 0; i < 21; i += 1) {
+      args.push("--ruleset", `G${i},[]GEOIP,CN`);
+    }
+    expect(await runCli(args)).toBe(1);
+    expect(stderr).toContain("Too many rulesets");
   });
 });
