@@ -3,9 +3,13 @@ import {
   type ProxyGroupConfig,
   type RulesetConfig,
   type RulesetContent,
+  MAX_REQUEST_LIST_CHARS,
+  MAX_REQUEST_LIST_ENTRIES,
+  TARGETS,
   TargetFormat,
   convertNodes,
   createSelectGroup,
+  isAffirmative,
   parseClashFlavor,
   parseExternalConfig,
   parseLink,
@@ -15,15 +19,33 @@ import {
   resolveNewFieldName,
 } from "@subconverter/core";
 import {
+  MAX_FETCH_BYTES,
+  MAX_FILENAME_CHARS,
+  MAX_GROUPS,
+  MAX_NODES,
+  MAX_RULESET_FETCH_BYTES,
+  MAX_RULESETS,
+  MAX_SUBSCRIPTION_URLS,
   buildCountryResolver,
   collectRulesets,
   fetchSubscription,
   startServer,
   writeOutputFile,
 } from "@subconverter/node";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 
-const TARGET_VALUES = new Set(Object.values(TargetFormat));
+/** Cap local subscription file/stdin reads (server parity: single-fetch body cap). */
+const MAX_LOCAL_FILE_BYTES = MAX_FETCH_BYTES;
+/** Cap local/remote config + base reads (server parity: 1MB config/base fetch cap). */
+const MAX_CONFIG_FILE_BYTES = MAX_RULESET_FETCH_BYTES;
+
+/**
+ * Convertible targets: core `TARGETS` minus `auto`. `auto` is only a
+ * request-parsing default (the server substitutes `clash`); accepting it here
+ * would reach `generate` and fail with `Unsupported`, so reject it like the
+ * server does instead of listing it.
+ */
+const TARGET_VALUES = new Set([...TARGETS].filter((target) => target !== TargetFormat.Auto));
 
 /**
  * Parse `--rename`/`--emoji`/`--name-regex match@replace` style rules.
@@ -177,27 +199,37 @@ function flag(state: ArgState, name: string): string | undefined {
 }
 
 function flagBool(state: ArgState, name: string): boolean {
-  // Any `true`/`1`/bare occurrence wins, mirroring server `queryBoolFlag`
+  // Any affirmative occurrence wins, mirroring server `queryBoolFlag`
   // OR semantics (e.g. `--with-rules=false --with-rules` is on).
   const values = state.flags.get(name);
   if (!values) {
     return false;
   }
-  return values.some((raw) => {
-    const normalized = raw.trim().toLowerCase();
-    // Mirror core `boolArg`: bare flags arrive as `"true"`, and `=1` counts.
-    return (
-      normalized === "true" ||
-      normalized === "1" ||
-      normalized === "yes" ||
-      normalized === "on" ||
-      normalized === ""
-    );
-  });
+  // Share core `isAffirmative` so the CLI accepts exactly the literals the
+  // server documents (bare flags arrive as `"true"`, and `=1` counts).
+  return values.some((raw) => isAffirmative(raw));
 }
 
 function flagAll(state: ArgState, name: string): string[] {
   return state.flags.get(name) ?? [];
+}
+
+/** Enforce core 50-entry/2000-char caps on merged external-config lists (server parity). */
+function assertMergedListCap(
+  entries: readonly string[] | readonly { match: string; replace: string }[],
+  name: string,
+): string | undefined {
+  if (entries.length > MAX_REQUEST_LIST_ENTRIES) {
+    return `Too many ${name} (max ${String(MAX_REQUEST_LIST_ENTRIES)}).`;
+  }
+  let chars = 0;
+  for (const entry of entries) {
+    chars += typeof entry === "string" ? entry.length : entry.match.length + entry.replace.length;
+  }
+  if (chars > MAX_REQUEST_LIST_CHARS) {
+    return `${name} exceeds size limit (max ${String(MAX_REQUEST_LIST_CHARS)} chars).`;
+  }
+  return undefined;
 }
 
 /**
@@ -381,31 +413,60 @@ async function runConvert(state: ArgState): Promise<number> {
     process.stderr.write("No input provided. Use --url, --file, or a positional path.\n");
     return 1;
   }
+  if (sources.length > MAX_SUBSCRIPTION_URLS) {
+    process.stderr.write(`Too many inputs (max ${String(MAX_SUBSCRIPTION_URLS)}).\n`);
+    return 1;
+  }
 
   const bodies: string[] = [];
   for (const source of sources) {
     if (/^https?:\/\//i.test(source)) {
       bodies.push(await fetchSubscription(source));
     } else if (source === "-") {
-      bodies.push(await readStdin());
+      bodies.push(await readStdinCapped(MAX_LOCAL_FILE_BYTES));
     } else if (/^[a-z][a-z0-9+.-]*:\/\//i.test(source)) {
       // A proxy share link (e.g. ss://, vmess://, trojan://).
       bodies.push(source);
     } else {
-      bodies.push(await readFile(source, "utf-8"));
+      bodies.push(await readFileCapped(source, MAX_LOCAL_FILE_BYTES));
     }
   }
 
   // Source N keeps group id N so `!!GROUPID=`/`!!INSERT=` rules can select it.
-  // The trailing newline keeps `explodeSub` on its line-delimited path (a
-  // single line would otherwise be split on spaces, truncating `#remarks`).
-  const nodes = bodies.flatMap((body, index) => parseSubscription(`${body}\n`, index));
+  // `parseSubscription` throws statusCode 400 in-parse once the node cap is
+  // exceeded; surface it as exit 1 like the other input limits below.
+  let nodes: ReturnType<typeof parseSubscription>;
+  try {
+    nodes = bodies.flatMap((body, index) => parseSubscription(body, index));
+  } catch (error) {
+    if ((error as { statusCode?: unknown })?.statusCode === 400) {
+      process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+      return 1;
+    }
+    throw error;
+  }
+  if (nodes.length > MAX_NODES) {
+    process.stderr.write(`Too many proxy nodes (max ${String(MAX_NODES)}).\n`);
+    return 1;
+  }
   if (nodes.length === 0) {
     process.stderr.write("No proxy nodes found in the input.\n");
     return 1;
   }
 
   const groups: ProxyGroupConfig[] = flagAll(state, "group").map((name) => createSelectGroup(name));
+  if (groups.length > MAX_GROUPS) {
+    process.stderr.write(`Too many groups (max ${String(MAX_GROUPS)}).\n`);
+    return 1;
+  }
+  for (const group of groups) {
+    if (group.name.length > MAX_FILENAME_CHARS) {
+      process.stderr.write(
+        `Group name exceeds size limit (max ${String(MAX_FILENAME_CHARS)} chars).\n`,
+      );
+      return 1;
+    }
+  }
 
   const settings: Partial<ExtraSettings> = {
     addEmoji: flagBool(state, "add-emoji"),
@@ -455,17 +516,39 @@ async function runConvert(state: ArgState): Promise<number> {
       rulesetConfigs.push(parsed);
     }
   }
+  if (rulesetConfigs.length > MAX_RULESETS) {
+    process.stderr.write(`Too many rulesets (max ${String(MAX_RULESETS)}).\n`);
+    return 1;
+  }
   const configSource = flag(state, "config");
   if (configSource) {
     const raw =
       /^https?:\/\//i.test(configSource) || configSource === "-"
         ? configSource === "-"
-          ? await readStdin()
-          : await fetchSubscription(configSource)
-        : await readFile(configSource, "utf-8");
+          ? await readStdinCapped(MAX_CONFIG_FILE_BYTES)
+          : await fetchSubscription(configSource, { maxBytes: MAX_CONFIG_FILE_BYTES })
+        : await readFileCapped(configSource, MAX_CONFIG_FILE_BYTES);
     const external = parseExternalConfig(raw);
     groups.push(...external.groups);
+    if (groups.length > MAX_GROUPS) {
+      process.stderr.write(`Too many groups (max ${String(MAX_GROUPS)}).\n`);
+      return 1;
+    }
+    // External `custom_proxy_group` bypasses the `--group` cap above: a 5KB
+    // `select` name would bloat every output (server parity: same 100-char cap).
+    for (const group of groups) {
+      if (group.name.length > MAX_FILENAME_CHARS) {
+        process.stderr.write(
+          `Group name exceeds size limit (max ${String(MAX_FILENAME_CHARS)} chars).\n`,
+        );
+        return 1;
+      }
+    }
     rulesetConfigs.push(...external.rulesets);
+    if (rulesetConfigs.length > MAX_RULESETS) {
+      process.stderr.write(`Too many rulesets (max ${String(MAX_RULESETS)}).\n`);
+      return 1;
+    }
     if (external.rename.length > 0) {
       settings.renameArray = [...(settings.renameArray ?? []), ...external.rename];
     }
@@ -508,18 +591,52 @@ async function runConvert(state: ArgState): Promise<number> {
     if (external.removeEmoji) {
       settings.removeEmoji = true;
     }
+    const mergedChecks: Array<
+      [readonly string[] | readonly { match: string; replace: string }[], string]
+    > = [
+      [settings.renameArray ?? [], "rename"],
+      [settings.emojiArray ?? [], "emoji"],
+      [settings.nameRegexArray ?? [], "name_regex"],
+      [settings.nameRemove ?? [], "name_remove"],
+      [settings.includeRemarks ?? [], "include"],
+      [settings.excludeRemarks ?? [], "exclude"],
+      [settings.includeCountries ?? [], "include_country"],
+      [settings.excludeCountries ?? [], "exclude_country"],
+      [
+        Object.entries(settings.templateVars ?? {}).map(([match, replace]) => ({
+          match,
+          replace,
+        })),
+        "templateVars",
+      ],
+    ];
+    for (const [entries, name] of mergedChecks) {
+      const error = assertMergedListCap(entries, name);
+      if (error !== undefined) {
+        process.stderr.write(`${error}\n`);
+        return 1;
+      }
+    }
   }
   let rulesets: RulesetContent[] | undefined;
   if (rulesetConfigs.length > 0) {
-    rulesets = await collectRulesets(rulesetConfigs);
+    try {
+      rulesets = await collectRulesets(rulesetConfigs);
+    } catch (error) {
+      if ((error as { statusCode?: unknown })?.statusCode === 400) {
+        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        return 1;
+      }
+      throw error;
+    }
   }
 
   let baseConf = "";
   const basePath = flag(state, "base");
   if (basePath) {
     baseConf = /^https?:\/\//i.test(basePath)
-      ? await fetchSubscription(basePath)
-      : await readFile(basePath, "utf-8");
+      ? await fetchSubscription(basePath, { maxBytes: MAX_CONFIG_FILE_BYTES })
+      : await readFileCapped(basePath, MAX_CONFIG_FILE_BYTES);
   }
 
   // Rules are on by default (bundled upstream-like defaults, offline);
@@ -585,10 +702,48 @@ async function runConvert(state: ArgState): Promise<number> {
   return 0;
 }
 
-async function readStdin(): Promise<string> {
+async function readFileCapped(path: string, maxBytes: number): Promise<string> {
+  // Stat first so a multi-GB file fails without buffering it.
+  try {
+    const info = await stat(path);
+    if (info.size > maxBytes) {
+      throw Object.assign(
+        new Error(`File exceeds size limit (max ${String(maxBytes)} bytes): ${path}`),
+        {
+          statusCode: 400,
+        },
+      );
+    }
+  } catch (error) {
+    if ((error as { statusCode?: unknown })?.statusCode === 400) {
+      throw error;
+    }
+    // Missing/unreadable files fall through to `readFile` for the original error.
+  }
+  const data = await readFile(path);
+  if (data.byteLength > maxBytes) {
+    throw Object.assign(
+      new Error(`File exceeds size limit (max ${String(maxBytes)} bytes): ${path}`),
+      {
+        statusCode: 400,
+      },
+    );
+  }
+  return data.toString("utf-8");
+}
+
+async function readStdinCapped(maxBytes: number): Promise<string> {
   const chunks: Buffer[] = [];
+  let total = 0;
   for await (const chunk of process.stdin) {
-    chunks.push(chunk as Buffer);
+    const buf = typeof chunk === "string" ? Buffer.from(chunk) : (chunk as Buffer);
+    total += buf.byteLength;
+    if (total > maxBytes) {
+      throw Object.assign(new Error(`Input exceeds size limit (max ${String(maxBytes)} bytes).`), {
+        statusCode: 400,
+      });
+    }
+    chunks.push(buf);
   }
   return Buffer.concat(chunks).toString("utf-8");
 }

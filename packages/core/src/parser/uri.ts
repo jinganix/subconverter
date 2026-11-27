@@ -14,8 +14,17 @@ import {
   vmessConstruct,
   wireGuardConstruct,
 } from "./construct";
+import { MAX_NODES } from "../settings/request-params";
 import type { Proxy } from "../types/proxy";
 import { DEFAULT_GROUPS, createProxy } from "../types/proxy";
+
+/** Throw a 400 once the in-parse node cap is exceeded (DoS guard). */
+function throwTooManyNodes(limit: number): never {
+  throw Object.assign(new Error(`Too many proxy nodes (max ${String(limit)}).`), {
+    statusCode: 400,
+  });
+}
+
 import { parseTriBool } from "../types/tribool";
 import { urlSafeBase64Decode } from "../utils/base64";
 import { split, toInt, trim } from "../utils/string";
@@ -530,8 +539,13 @@ export function explodeSsr(ssr: string, node: Proxy): void {
   }
 }
 
-/** Parse an `ssd://` (ShadowsocksD) subscription. */
-export function explodeSsd(link: string, nodes: Proxy[]): void {
+/**
+ * Parse an `ssd://` (ShadowsocksD) subscription.
+ *
+ * Aborts in-parse once `nodes.length` exceeds `limit` so a hostile body
+ * cannot force a full 125k-element `Proxy[]` before the cap is enforced.
+ */
+export function explodeSsd(link: string, nodes: Proxy[], limit: number = MAX_NODES): void {
   let index = nodes.length;
   const decoded = urlSafeBase64Decode(link.slice(6));
   let data: any;
@@ -583,6 +597,9 @@ export function explodeSsd(link: string, nodes: Proxy[]): void {
     node.id = index;
     nodes.push(node);
     index += 1;
+    if (nodes.length > limit) {
+      throwTooManyNodes(limit);
+    }
   }
 }
 

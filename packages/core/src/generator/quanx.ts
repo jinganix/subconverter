@@ -1,4 +1,5 @@
 import { groupGenerate, processRemark } from "./nodes";
+import { sanitizeProxy } from "../parser/construct";
 import type { Proxy } from "../types/proxy";
 import { ProxyType, proxyTypeName } from "../types/proxy";
 import type { ProxyGroupConfig } from "../types/proxy-group";
@@ -236,16 +237,20 @@ export function toQuanX(
   options: QuanxOptions,
 ): string {
   const remarksList: string[] = [];
+  const seenRemarks = new Set<string>();
+  const remarkCounts = new Map<string, number>();
   const serverLines: string[] = [];
   const nodelist: Proxy[] = [];
 
   for (const src of nodes) {
     // Work on a copy so the caller's nodes keep their remarks intact.
     const x = { ...src };
+    // Fold hostile CR/LF before interpolation (see sanitizeProxy).
+    sanitizeProxy(x);
     if (settings.appendProxyType) {
       x.remark = `[${proxyTypeName(x.type)}] ${x.remark}`;
     }
-    const remark = processRemark(x.remark, remarksList);
+    const remark = processRemark(x.remark, remarksList, true, seenRemarks, remarkCounts);
     x.remark = remark;
     const line = buildQuanxNode(x, settings, remark);
     if (line === undefined) {
@@ -253,6 +258,7 @@ export function toQuanX(
     }
     serverLines.push(line);
     remarksList.push(remark);
+    seenRemarks.add(remark);
     nodelist.push(x);
   }
 

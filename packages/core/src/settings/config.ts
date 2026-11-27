@@ -59,6 +59,27 @@ const GROUP_TYPE_MAP: Record<string, ProxyGroupType> = {
   "url-test": ProxyGroupType.URLTest,
 };
 
+/** Per-group cap for `custom_proxy_group` rules (DoS mitigation). */
+const MAX_GROUP_PROXY_ENTRIES = 100;
+/** Total cap across all `custom_proxy_group` rules in one config. */
+const MAX_GROUP_PROXY_TOTAL_ENTRIES = 200;
+/** Cap for combined rule characters (per-group and total; mirrors request-params 2000). */
+const MAX_GROUP_PROXY_CHARS = 2000;
+/** Cap external-config ruleset entries (mirrors server `MAX_RULESETS`).
+ * Local copy (not imported from `request-params`) to avoid a `config` <->
+ * `request-params` import cycle (`request-params` imports `parseRegexMatch`).
+ */
+const MAX_EXTERNAL_RULESETS = 20;
+/** Cap external-config group entries (mirrors server `MAX_GROUPS`). */
+const MAX_EXTERNAL_GROUPS = 20;
+/** Cap repeatable external-config lists (mirrors `request-params` 50/2000). */
+const MAX_EXTERNAL_LIST_ENTRIES = 50;
+const MAX_EXTERNAL_LIST_CHARS = 2000;
+
+function throwBadRequest(message: string): never {
+  throw Object.assign(new Error(message), { statusCode: 400 });
+}
+
 /** Parse `interval[,timeout[,tolerance]]`, mirroring `parseGroupTimes`. */
 export function parseGroupTimes(src: string): {
   interval: number;
@@ -116,11 +137,38 @@ export function parseCustomProxyGroup(value: string): ProxyGroupConfig | undefin
     group.timeout = times.timeout;
     group.tolerance = times.tolerance;
   }
+  let proxyChars = 0;
   for (let i = 2; i < upperBound; i += 1) {
     const rule = parts[i] as string;
     if (startsWith(rule, "!!PROVIDER=")) {
-      group.usingProvider.push(...rule.slice(11).split(","));
+      const providers = rule.slice(11).split(",");
+      if (
+        group.proxies.length + group.usingProvider.length + providers.length >
+        MAX_GROUP_PROXY_ENTRIES
+      ) {
+        throwBadRequest(
+          `Too many custom_proxy_group rules (max ${String(MAX_GROUP_PROXY_ENTRIES)} per group).`,
+        );
+      }
+      proxyChars += rule.length;
+      if (proxyChars > MAX_GROUP_PROXY_CHARS) {
+        throwBadRequest(
+          `custom_proxy_group exceeds size limit (max ${String(MAX_GROUP_PROXY_CHARS)} chars).`,
+        );
+      }
+      group.usingProvider.push(...providers);
     } else {
+      if (group.proxies.length + group.usingProvider.length + 1 > MAX_GROUP_PROXY_ENTRIES) {
+        throwBadRequest(
+          `Too many custom_proxy_group rules (max ${String(MAX_GROUP_PROXY_ENTRIES)} per group).`,
+        );
+      }
+      proxyChars += rule.length;
+      if (proxyChars > MAX_GROUP_PROXY_CHARS) {
+        throwBadRequest(
+          `custom_proxy_group exceeds size limit (max ${String(MAX_GROUP_PROXY_CHARS)} chars).`,
+        );
+      }
       group.proxies.push(rule);
     }
   }
@@ -184,20 +232,59 @@ export function parseExternalConfig(content: string): ExternalConfig {
   };
 
   const doc = parseIni(content, { keepEmptyValues: true });
+  let templateChars = 0;
   for (const section of doc.sections) {
     if (section.name.toLowerCase() !== "template") {
       continue;
     }
     for (const [key, value] of section.items) {
       if (key.toLowerCase() === "template_path") {
+        // Unused server-side but still capped so an evil config cannot stash
+        // an unbounded path string here (same 2000-char budget as lists).
+        if (value.length > MAX_EXTERNAL_LIST_CHARS) {
+          throwBadRequest(
+            `templatePath exceeds size limit (max ${String(MAX_EXTERNAL_LIST_CHARS)} chars).`,
+          );
+        }
         result.templatePath = value;
       } else {
         result.templateVars[key] = value;
+        templateChars += key.length + value.length;
+        if (Object.keys(result.templateVars).length > MAX_EXTERNAL_LIST_ENTRIES) {
+          throwBadRequest(`Too many templateVars (max ${String(MAX_EXTERNAL_LIST_ENTRIES)}).`);
+        }
+        if (templateChars > MAX_EXTERNAL_LIST_CHARS) {
+          throwBadRequest(
+            `templateVars exceeds size limit (max ${String(MAX_EXTERNAL_LIST_CHARS)} chars).`,
+          );
+        }
       }
     }
   }
+  // Per-list char budgets (mirrors `request-params` 50-entry/2000-char caps so
+  // an evil config cannot force the server to allocate 100k entries before
+  // the post-merge `assertMergedListCap` ever runs).
+  let renameChars = 0;
+  let emojiChars = 0;
+  let nameRegexChars = 0;
+  let nameRemoveChars = 0;
+  let includeChars = 0;
+  let excludeChars = 0;
+  let includeCountryChars = 0;
+  let excludeCountryChars = 0;
+  let baseFilesChars = 0;
+  const assertExternalListCap = (count: number, chars: number, name: string): void => {
+    if (count > MAX_EXTERNAL_LIST_ENTRIES) {
+      throwBadRequest(`Too many ${name} (max ${String(MAX_EXTERNAL_LIST_ENTRIES)}).`);
+    }
+    if (chars > MAX_EXTERNAL_LIST_CHARS) {
+      throwBadRequest(`${name} exceeds size limit (max ${String(MAX_EXTERNAL_LIST_CHARS)} chars).`);
+    }
+  };
   const relevant = doc.sections.filter((section) => section.name.toLowerCase() === "custom");
   const sections = relevant.length > 0 ? relevant : [{ items: [...doc.isolated], name: "custom" }];
+  let totalProxyEntries = 0;
+  let totalProxyChars = 0;
 
   for (const section of sections) {
     for (const [keyRaw, value] of section.items) {
@@ -206,6 +293,9 @@ export function parseExternalConfig(content: string): ExternalConfig {
         case "ruleset": {
           const parsed = parseRulesetConfig(value);
           if (parsed) {
+            if (result.rulesets.length >= MAX_EXTERNAL_RULESETS) {
+              throwBadRequest(`Too many rulesets (max ${String(MAX_EXTERNAL_RULESETS)}).`);
+            }
             result.rulesets.push(parsed);
           }
           break;
@@ -213,33 +303,72 @@ export function parseExternalConfig(content: string): ExternalConfig {
         case "custom_proxy_group": {
           const parsed = parseCustomProxyGroup(value);
           if (parsed) {
+            const entries = parsed.proxies.length + parsed.usingProvider.length;
+            let chars = 0;
+            for (const rule of parsed.proxies) {
+              chars += rule.length;
+            }
+            for (const provider of parsed.usingProvider) {
+              chars += provider.length;
+            }
+            totalProxyEntries += entries;
+            totalProxyChars += chars;
+            if (totalProxyEntries > MAX_GROUP_PROXY_TOTAL_ENTRIES) {
+              throwBadRequest(
+                `Too many custom_proxy_group rules (max ${String(MAX_GROUP_PROXY_TOTAL_ENTRIES)} total).`,
+              );
+            }
+            if (totalProxyChars > MAX_GROUP_PROXY_CHARS) {
+              throwBadRequest(
+                `custom_proxy_group exceeds size limit (max ${String(MAX_GROUP_PROXY_CHARS)} chars total).`,
+              );
+            }
+            if (result.groups.length >= MAX_EXTERNAL_GROUPS) {
+              throwBadRequest(`Too many groups (max ${String(MAX_EXTERNAL_GROUPS)}).`);
+            }
             result.groups.push(parsed);
           }
           break;
         }
         case "rename":
-        case "rename_node":
-          result.rename.push(parseRegexMatch(value, "@"));
+        case "rename_node": {
+          const rule = parseRegexMatch(value, "@");
+          result.rename.push(rule);
+          renameChars += rule.match.length + rule.replace.length;
+          assertExternalListCap(result.rename.length, renameChars, "rename");
           break;
-        case "name_regex":
-          result.nameRegex.push(parseRegexMatch(value, "@"));
+        }
+        case "name_regex": {
+          const rule = parseRegexMatch(value, "@");
+          result.nameRegex.push(rule);
+          nameRegexChars += rule.match.length + rule.replace.length;
+          assertExternalListCap(result.nameRegex.length, nameRegexChars, "name_regex");
           break;
+        }
         case "name_remove":
           for (const fragment of value.split(",")) {
             const trimmed = fragment.trim();
             if (trimmed !== "") {
               result.nameRemove.push(trimmed);
+              nameRemoveChars += trimmed.length;
+              assertExternalListCap(result.nameRemove.length, nameRemoveChars, "name_remove");
             }
           }
           break;
         case "emoji":
-        case "emojis":
-          result.emoji.push(parseRegexMatch(value, ","));
+        case "emojis": {
+          const rule = parseRegexMatch(value, ",");
+          result.emoji.push(rule);
+          emojiChars += rule.match.length + rule.replace.length;
+          assertExternalListCap(result.emoji.length, emojiChars, "emoji");
           break;
+        }
         case "include_remarks":
         case "include":
           if (value !== "") {
             result.includeRemarks.push(value);
+            includeChars += value.length;
+            assertExternalListCap(result.includeRemarks.length, includeChars, "include");
           }
           break;
         case "include_country":
@@ -247,6 +376,12 @@ export function parseExternalConfig(content: string): ExternalConfig {
             const trimmed = fragment.trim().toUpperCase();
             if (trimmed !== "") {
               result.includeCountries.push(trimmed);
+              includeCountryChars += trimmed.length;
+              assertExternalListCap(
+                result.includeCountries.length,
+                includeCountryChars,
+                "include_country",
+              );
             }
           }
           break;
@@ -255,6 +390,12 @@ export function parseExternalConfig(content: string): ExternalConfig {
             const trimmed = fragment.trim().toUpperCase();
             if (trimmed !== "") {
               result.excludeCountries.push(trimmed);
+              excludeCountryChars += trimmed.length;
+              assertExternalListCap(
+                result.excludeCountries.length,
+                excludeCountryChars,
+                "exclude_country",
+              );
             }
           }
           break;
@@ -262,6 +403,8 @@ export function parseExternalConfig(content: string): ExternalConfig {
         case "exclude":
           if (value !== "") {
             result.excludeRemarks.push(value);
+            excludeChars += value.length;
+            assertExternalListCap(result.excludeRemarks.length, excludeChars, "exclude");
           }
           break;
         case "add_emoji":
@@ -283,6 +426,15 @@ export function parseExternalConfig(content: string): ExternalConfig {
           break;
         default:
           if (key.endsWith("_rule_base")) {
+            // Unused server-side (`baseConf` only accepts remote URLs) but
+            // still capped like every other repeatable list so an evil
+            // config cannot stash 100k entries here.
+            baseFilesChars += key.length + value.length;
+            assertExternalListCap(
+              Object.keys(result.baseFiles).length + 1,
+              baseFilesChars,
+              "baseFiles",
+            );
             result.baseFiles[key] = value;
           }
           break;

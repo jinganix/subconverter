@@ -69,6 +69,29 @@ export function isHostIp(host: string): boolean {
 export interface ResolveCountryOptions {
   /** DNS lookup override (tests). Defaults to `node:dns/promises`. */
   lookup?: (host: string) => Promise<string[]>;
+  /** Max concurrent DNS lookups (default 20). */
+  concurrency?: number;
+  /** Per-host DNS timeout in ms (default 3000). */
+  timeoutMs?: number;
+  /** Overall-deadline signal: aborts pending DNS lookups when the `/sub` budget expires. */
+  signal?: AbortSignal;
+}
+
+const GEOIP_CONCURRENCY = 20;
+const GEOIP_LOOKUP_TIMEOUT_MS = 500;
+/** Cap unique hostnames resolved per call; extras are skipped (DoS mitigation). */
+const MAX_UNIQUE_HOSTS = 100;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("DNS lookup timed out")), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }) as Promise<T>;
 }
 
 async function defaultLookup(host: string): Promise<string[]> {
@@ -89,35 +112,96 @@ export async function resolveNodeCountries(
   options: ResolveCountryOptions = {},
 ): Promise<Map<Proxy, string>> {
   const lookup = options.lookup ?? defaultLookup;
+  const concurrency = options.concurrency ?? GEOIP_CONCURRENCY;
+  const timeoutMs = options.timeoutMs ?? GEOIP_LOOKUP_TIMEOUT_MS;
+  const signal = options.signal;
+  if (signal?.aborted) {
+    throw Object.assign(new Error("Request timed out"), { statusCode: 504 });
+  }
   const codes = new Map<Proxy, string>();
   const hostCache = new Map<string, string | undefined>();
+  // Slice before resolving: each skipped host keeps its name untouched while
+  // bounding DNS work (100 hosts x 500ms timeout) and the `byHost` map below.
+  const uniqueHosts = [...new Set(nodes.map((node) => node.hostname.trim()))]
+    .filter((host) => host !== "")
+    .slice(0, MAX_UNIQUE_HOSTS);
 
-  for (const node of nodes) {
-    const host = node.hostname.trim();
-    if (host === "") {
-      continue;
+  async function resolveHost(host: string): Promise<void> {
+    if (signal?.aborted) {
+      throw Object.assign(new Error("Request timed out"), { statusCode: 504 });
     }
-    let code = hostCache.get(host);
-    if (code === undefined) {
-      if (hostCache.has(host)) {
-        continue;
-      }
-      if (isHostIp(host)) {
-        code = database.lookupCountry(host);
-      } else {
+    if (isHostIp(host)) {
+      hostCache.set(host, database.lookupCountry(host));
+      return;
+    }
+    try {
+      const lookupPromise = withTimeout(lookup(host), timeoutMs);
+      let addresses: string[];
+      if (signal) {
+        // Remove the abort listener after the race settles: one leaked
+        // listener per hostname (~50 per request) trips MaxListeners.
+        let onAbort: (() => void) | undefined;
         try {
-          for (const address of await lookup(host)) {
-            code = database.lookupCountry(address);
-            if (code !== undefined) {
-              break;
+          const abortPromise = new Promise<never>((_, reject) => {
+            onAbort = () =>
+              reject(Object.assign(new Error("Request timed out"), { statusCode: 504 }));
+            if (signal.aborted) {
+              onAbort();
+              return;
             }
+            signal.addEventListener("abort", onAbort, { once: true });
+          });
+          abortPromise.catch(() => undefined);
+          addresses = await Promise.race([lookupPromise, abortPromise]);
+        } finally {
+          if (onAbort !== undefined) {
+            signal.removeEventListener("abort", onAbort);
           }
-        } catch {
-          code = undefined;
+        }
+      } else {
+        addresses = await lookupPromise;
+      }
+      let code: string | undefined;
+      for (const address of addresses) {
+        code = database.lookupCountry(address);
+        if (code !== undefined) {
+          break;
         }
       }
       hostCache.set(host, code);
+    } catch (error) {
+      // Overall/client timeouts (504) must fail fast, not resolve to a
+      // skipped host (200 with a missing country prefix). Only per-host DNS
+      // failures (timeout/unresolvable) are skipped.
+      if (signal?.aborted) {
+        throw Object.assign(new Error("Request timed out"), { statusCode: 504 });
+      }
+      if ((error as { statusCode?: unknown })?.statusCode === 504) {
+        throw error;
+      }
+      hostCache.set(host, undefined);
     }
+  }
+
+  let next = 0;
+  async function worker(): Promise<void> {
+    while (true) {
+      if (signal?.aborted) {
+        throw Object.assign(new Error("Request timed out"), { statusCode: 504 });
+      }
+      const current = next;
+      next += 1;
+      if (current >= uniqueHosts.length) {
+        return;
+      }
+      await resolveHost(uniqueHosts[current] as string);
+    }
+  }
+  const workers = Math.min(Math.max(concurrency, 1), Math.max(uniqueHosts.length, 1));
+  await Promise.all(Array.from({ length: workers }, () => worker()));
+
+  for (const node of nodes) {
+    const code = hostCache.get(node.hostname.trim());
     if (code !== undefined && code !== "") {
       codes.set(node, code);
     }

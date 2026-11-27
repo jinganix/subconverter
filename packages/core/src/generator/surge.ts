@@ -1,4 +1,5 @@
 import { groupGenerate, processRemark } from "./nodes";
+import { sanitizeProxy } from "../parser/construct";
 import type { Proxy } from "../types/proxy";
 import { ProxyType, proxyTypeName } from "../types/proxy";
 import type { ProxyGroupConfig } from "../types/proxy-group";
@@ -95,6 +96,8 @@ function buildSurge(
 ): SurgeBuildResult {
   const surgeVer = options.version;
   const remarksList: string[] = [];
+  const seenRemarks = new Set<string>();
+  const remarkCounts = new Map<string, number>();
   const proxies: string[] = [];
   const nodelist: Proxy[] = [];
   const extraSections = new Map<string, string[]>();
@@ -104,10 +107,12 @@ function buildSurge(
   for (const src of nodes) {
     // Work on a copy so the caller's nodes keep their remarks intact.
     const x = { ...src };
+    // Fold hostile CR/LF before interpolation (see sanitizeProxy).
+    sanitizeProxy(x);
     if (settings.appendProxyType) {
       x.remark = `[${proxyTypeName(x.type)}] ${x.remark}`;
     }
-    const remark = processRemark(x.remark, remarksList);
+    const remark = processRemark(x.remark, remarksList, true, seenRemarks, remarkCounts);
     x.remark = remark;
 
     const udp = x.udp !== undefined ? x.udp : settings.udp;
@@ -331,6 +336,7 @@ function buildSurge(
 
     proxies.push(`${remark} = ${proxy}`);
     remarksList.push(remark);
+    seenRemarks.add(remark);
     nodelist.push(x);
   }
 

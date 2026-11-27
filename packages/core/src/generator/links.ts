@@ -1,4 +1,5 @@
 import { isSsCipher, SSR_CIPHERS } from "../parser/ciphers";
+import { sanitizeProxy } from "../parser/construct";
 import type { Proxy } from "../types/proxy";
 import { ProxyType } from "../types/proxy";
 import type { ExtraSettings } from "../types/settings";
@@ -36,12 +37,16 @@ export function vmessLinkConstruct(
 
 /** Build an `ss://` link. */
 export function ssLinkConstruct(proxy: Proxy): string {
-  const port = String(proxy.port);
-  let link = `ss://${urlSafeBase64Encode(`${proxy.encryptMethod}:${proxy.password}`)}@${proxy.hostname}:${port}`;
-  if (proxy.plugin !== "" && proxy.pluginOption !== "") {
-    link += `/?plugin=${urlEncode(`${proxy.plugin};${proxy.pluginOption}`)}`;
+  // Hostile CR/LF (e.g. via SSD `server`) would inject extra lines into the
+  // plaintext node-list output; fold on a copy so the caller is untouched.
+  const node = { ...proxy };
+  sanitizeProxy(node);
+  const port = String(node.port);
+  let link = `ss://${urlSafeBase64Encode(`${node.encryptMethod}:${node.password}`)}@${node.hostname}:${port}`;
+  if (node.plugin !== "" && node.pluginOption !== "") {
+    link += `/?plugin=${urlEncode(`${node.plugin};${node.pluginOption}`)}`;
   }
-  link += `#${urlEncode(proxy.remark)}`;
+  link += `#${urlEncode(node.remark)}`;
   return link;
 }
 
@@ -67,18 +72,21 @@ export function ssrLinkConstruct(
 
 /** Build a `trojan://` link. */
 export function trojanLinkConstruct(proxy: Proxy): string {
-  const port = String(proxy.port);
-  let link = `trojan://${proxy.password}@${proxy.hostname}:${port}?allowInsecure=${proxy.allowInsecure === true ? "1" : "0"}`;
-  if (proxy.host !== "") {
-    link += `&sni=${proxy.host}`;
+  // See `ssLinkConstruct`: fold CR/LF on a copy before interpolating.
+  const node = { ...proxy };
+  sanitizeProxy(node);
+  const port = String(node.port);
+  let link = `trojan://${node.password}@${node.hostname}:${port}?allowInsecure=${node.allowInsecure === true ? "1" : "0"}`;
+  if (node.host !== "") {
+    link += `&sni=${node.host}`;
   }
-  if (proxy.transferProtocol === "ws") {
+  if (node.transferProtocol === "ws") {
     link += "&ws=1";
-    if (proxy.path !== "") {
-      link += `&wspath=${urlEncode(proxy.path)}`;
+    if (node.path !== "") {
+      link += `&wspath=${urlEncode(node.path)}`;
     }
   }
-  link += `#${urlEncode(proxy.remark)}`;
+  link += `#${urlEncode(node.remark)}`;
   return link;
 }
 
@@ -97,7 +105,11 @@ export function proxyToSingle(nodes: Proxy[], types: number, settings: ExtraSett
   const trojan = getBit(types, 4);
   let allLinks = "";
 
-  for (const x of nodes) {
+  for (const src of nodes) {
+    // Fold hostile CR/LF once so every branch (including raw `ss://`
+    // fallbacks and `vmess` JSON fields) is safe; the caller is untouched.
+    const x = { ...src };
+    sanitizeProxy(x);
     let proxyStr = "";
     const port = String(x.port);
     const aid = String(x.alterId);
@@ -190,7 +202,9 @@ export function proxyToSsSub(nodes: Proxy[], baseConf: string): string {
     base = {};
   }
   const proxies: unknown[] = [];
-  for (const x of nodes) {
+  for (const src of nodes) {
+    const x = { ...src };
+    sanitizeProxy(x);
     let plugin = x.plugin;
     switch (x.type) {
       case ProxyType.Shadowsocks:
@@ -252,7 +266,9 @@ export function proxyToSsd(nodes: Proxy[], group: string, userinfo: string): str
   }
   const servers: unknown[] = [];
   let index = 0;
-  for (const x of nodes) {
+  for (const src of nodes) {
+    const x = { ...src };
+    sanitizeProxy(x);
     if (x.type === ProxyType.Shadowsocks) {
       const plugin = x.plugin === "obfs-local" ? "simple-obfs" : x.plugin;
       servers.push({

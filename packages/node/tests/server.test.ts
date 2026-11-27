@@ -45,10 +45,16 @@ describe("server helpers", () => {
   });
 
   it("collects repeated url params", () => {
+    // A literal `|` separates urls; an encoded `%7C` is data (see finding 4).
+    expect(collectRequestUrls("url=https://a|https://b&url=https://c")).toEqual([
+      "https://a",
+      "https://b",
+      "https://c",
+    ]);
     const params = new URLSearchParams();
-    params.append("url", "https://a|https://b");
+    params.append("url", "https://a");
     params.append("url", "https://c");
-    expect(collectRequestUrls(params.toString())).toEqual(["https://a", "https://b", "https://c"]);
+    expect(collectRequestUrls(params.toString())).toEqual(["https://a", "https://c"]);
   });
 
   it("preserves plus signs in url params (no URLSearchParams space decoding)", () => {
@@ -432,7 +438,7 @@ describe("convertSubRequest", () => {
     const raw =
       "target=clash&url=https%3A%2F%2Fexample.com%2Fsub&no_rules=true" +
       "&name_regex=" +
-      encodeURIComponent("^abc@(.+?)\\..*$@$1") +
+      encodeURIComponent("^abc@([^.]+)\\..*$@$1") +
       "&rename=" +
       encodeURIComponent("^server@node");
     const params = new URLSearchParams(raw);
